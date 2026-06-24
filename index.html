@@ -1,0 +1,28 @@
+<!doctype html>
+<!--
+  [層] より外円な機能 / OUTER  HTML の器(唯一のページ)
+  役割: アプリ全体が乗る土台ページ。中身は空のルート要素(id=root)が1つだけで、
+        そこに main.tsx が React を描き込む(=シングルページアプリ)。
+  挙動: ヘッダで Google Fonts を読み、本文末のモジュールスクリプトが
+        /src/main.tsx を起動する。Vite が開発/本番でこのファイルを入口にする。
+  注意: このコメント内にHTMLタグ(山かっこの head/body/script)の文字列を書かないこと。
+        Vite 開発サーバが最初の head 文字列の後へ必須スクリプトを差し込むため、
+        コメント内にあると差し込み位置がずれて白画面になる。
+-->
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nocturne Survivors</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Pirata+One&family=Shippori+Mincho:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

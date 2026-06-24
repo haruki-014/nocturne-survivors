@@ -1,0 +1,52 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="75%">
+      <stop offset="0%" stop-color="#190f2a"/>
+      <stop offset="58%" stop-color="#0b0712"/>
+      <stop offset="100%" stop-color="#06040e"/>
+    </radialGradient>
+    <radialGradient id="moon" cx="40%" cy="38%" r="65%">
+      <stop offset="0%" stop-color="#f08a93"/>
+      <stop offset="55%" stop-color="#c8323e"/>
+      <stop offset="100%" stop-color="#841f2c"/>
+    </radialGradient>
+    <radialGradient id="corona" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="rgba(200,50,62,0.55)"/>
+      <stop offset="45%" stop-color="rgba(180,42,56,0.16)"/>
+      <stop offset="100%" stop-color="rgba(180,42,56,0)"/>
+    </radialGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="rgba(217,164,65,0.9)"/>
+      <stop offset="100%" stop-color="rgba(217,164,65,0.25)"/>
+    </linearGradient>
+  </defs>
+
+  <!-- rounded square plate -->
+  <rect x="48" y="48" width="928" height="928" rx="208" fill="url(#bg)"/>
+  <rect x="49" y="49" width="926" height="926" rx="207" fill="none" stroke="rgba(232,220,195,0.10)" stroke-width="2"/>
+  <rect x="49" y="49" width="926" height="200" rx="207" fill="rgba(255,255,255,0.04)"/>
+
+  <!-- corona -->
+  <circle cx="512" cy="496" r="360" fill="url(#corona)"/>
+
+  <!-- gold orbital ring -->
+  <circle cx="512" cy="496" r="306" fill="none" stroke="url(#ring)" stroke-width="6" opacity="0.7"/>
+
+  <!-- blood moon with crescent bite -->
+  <g>
+    <circle cx="512" cy="496" r="250" fill="url(#moon)"/>
+    <!-- mare -->
+    <circle cx="446" cy="430" r="46" fill="rgba(90,20,30,0.45)"/>
+    <circle cx="566" cy="540" r="62" fill="rgba(90,20,30,0.4)"/>
+    <circle cx="540" cy="404" r="28" fill="rgba(90,20,30,0.4)"/>
+    <!-- crescent shadow -->
+    <circle cx="406" cy="412" r="226" fill="#06040e"/>
+  </g>
+
+  <!-- small accent stars -->
+  <g fill="#e8dcc3">
+    <circle cx="740" cy="300" r="6" opacity="0.85"/>
+    <circle cx="300" cy="690" r="5" opacity="0.7"/>
+    <circle cx="690" cy="700" r="4" opacity="0.6"/>
+  </g>
+</svg>

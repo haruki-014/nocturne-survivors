@@ -1,0 +1,2396 @@
+/* ═══════════════════════════════════════════════════════════
+   〔層〕より外円な機能 / OUTER ── スタイルシート(UIの見た目)
+   役割: React の各UI(HUD/カード/各画面)の配色・余白・装飾・アニメを一括で
+     司る。HTML 構造やゲーム挙動は持たず、class 名に対して見た目だけを与える。
+   挙動: 先頭の :root にデザイントークン(色・書体)を CSS 変数で集約し、各規則は
+     それを参照する。--hud-scale など一部の変数は実行時に JS(App)が書き換え、
+     設定スライダーで HUD の大きさを動的に変える。canvas(盤面)はエンジンが
+     直接描くため、ここでは扱わない。
+   トークン: 墨闇 / 羊皮紙 / 緋 / 月金 / 霊碧
+   表示書体: Pirata One (欧文) + しっぽり明朝 (和文) / 数値: IBM Plex Mono
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+  --ink: #0b0712;
+  --panel: #161022;
+  --panel-edge: #3a2a55;
+  --bone: #e8dcc3;
+  --bone-dim: #a99e88;
+  --blood: #c8323e;
+  --blood-bright: #ff4d5a;
+  --gold: #d9a441;
+  --soul: #4fd8c4;
+
+  --font-display: "Pirata One", "Shippori Mincho", serif;
+  --font-display-jp: "Shippori Mincho", serif;
+  --font-body: "Zen Kaku Gothic New", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --hud-scale: 1;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--ink);
+  color: var(--bone);
+  font-family: var(--font-body);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* ---------- レイアウト ---------- */
+
+.stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.overlay > * {
+  pointer-events: auto;
+}
+
+.overlay.dim {
+  background: rgba(6, 3, 11, 0.66);
+  backdrop-filter: blur(2px);
+}
+
+/* ---------- HUD ---------- */
+
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-size: calc(14px * var(--hud-scale));
+}
+
+.hud-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: calc(10px * var(--hud-scale)) calc(14px * var(--hud-scale)) 0;
+}
+
+.xpbar {
+  height: calc(10px * var(--hud-scale));
+  background: rgba(22, 16, 34, 0.85);
+  border: 1px solid var(--panel-edge);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.xpbar > div {
+  height: 100%;
+  background: linear-gradient(90deg, #2e8f81, var(--soul));
+  border-radius: 99px;
+  transition: width 0.15s ease-out;
+}
+
+.hud-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-top: calc(6px * var(--hud-scale));
+}
+
+.hud-left,
+.hud-right {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--hud-scale));
+}
+
+.hud-right {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  background: rgba(22, 16, 34, 0.85);
+  border: 1px solid var(--panel-edge);
+  border-radius: 8px;
+  padding: 0.25em 0.7em;
+  font-family: var(--font-mono);
+  font-size: calc(13px * var(--hud-scale));
+  letter-spacing: 0.04em;
+}
+
+.chip .label {
+  color: var(--bone-dim);
+  font-size: 0.82em;
+  font-family: var(--font-body);
+}
+
+.hud-timer {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: calc(24px * var(--hud-scale));
+  font-family: var(--font-display);
+  font-size: calc(34px * var(--hud-scale));
+  letter-spacing: 0.08em;
+  color: var(--bone);
+  text-shadow: 0 0 18px rgba(200, 50, 62, 0.5), 0 2px 0 rgba(0, 0, 0, 0.8);
+}
+
+.hp-chip strong {
+  color: var(--blood-bright);
+}
+
+/* 所持スキルのスロット列 */
+.slots {
+  display: flex;
+  gap: calc(5px * var(--hud-scale));
+  flex-wrap: wrap;
+  max-width: calc(260px * var(--hud-scale));
+}
+
+.slot {
+  position: relative;
+  width: calc(34px * var(--hud-scale));
+  height: calc(34px * var(--hud-scale));
+  display: grid;
+  place-items: center;
+  background: rgba(22, 16, 34, 0.9);
+  border: 1px solid var(--slot-color, var(--panel-edge));
+  border-radius: 8px;
+  font-size: calc(17px * var(--hud-scale));
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.6);
+}
+
+.slot .lv {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  font-family: var(--font-mono);
+  font-size: calc(9.5px * var(--hud-scale));
+  background: var(--slot-color, var(--panel-edge));
+  color: #0b0712;
+  font-weight: 600;
+  border-radius: 5px;
+  padding: 0 4px;
+  line-height: 1.4;
+}
+
+/* ボスHPバー */
+.bossbar {
+  position: absolute;
+  bottom: calc(22px * var(--hud-scale));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, 70vw);
+  text-align: center;
+}
+
+.bossbar .name {
+  font-family: var(--font-display-jp);
+  font-weight: 800;
+  font-size: calc(15px * var(--hud-scale));
+  letter-spacing: 0.18em;
+  color: var(--blood-bright);
+  text-shadow: 0 0 12px rgba(255, 77, 90, 0.6);
+  margin-bottom: 5px;
+}
+
+.bossbar .bar {
+  height: 9px;
+  border: 1px solid var(--blood);
+  background: rgba(22, 16, 34, 0.9);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.bossbar .bar > div {
+  height: 100%;
+  background: linear-gradient(90deg, #7d1622, var(--blood-bright));
+  transition: width 0.2s ease-out;
+}
+
+/* ---------- アルカナカード(シグネチャ) ---------- */
+
+.levelup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 26px;
+}
+
+.levelup-title {
+  font-family: var(--font-display-jp);
+  font-weight: 800;
+  font-size: clamp(20px, 3vw, 30px);
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;
+  color: var(--gold);
+  text-shadow: 0 0 22px rgba(217, 164, 65, 0.45);
+}
+
+.levelup-sub {
+  font-size: 12.5px;
+  color: var(--bone-dim);
+  letter-spacing: 0.14em;
+  margin-top: -16px;
+}
+
+.cards {
+  display: flex;
+  gap: clamp(12px, 2.4vw, 26px);
+  perspective: 900px;
+}
+
+.card {
+  --accent: var(--gold);
+  position: relative;
+  width: clamp(168px, 19vw, 220px);
+  min-height: clamp(238px, 30vw, 308px);
+  padding: 18px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  background:
+    radial-gradient(ellipse at 50% -10%, rgba(217, 164, 65, 0.1), transparent 55%),
+    linear-gradient(168deg, #1d1530, #120c1f 60%, #160e24);
+  border: 1px solid var(--accent);
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 4px var(--ink),
+    0 0 0 5px var(--panel-edge),
+    0 18px 44px rgba(0, 0, 0, 0.65);
+  color: var(--bone);
+  transform-origin: 50% 100%;
+  animation: card-draw 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.15) backwards;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.card:nth-child(1) { animation-delay: 0.05s; }
+.card:nth-child(2) { animation-delay: 0.14s; }
+.card:nth-child(3) { animation-delay: 0.23s; }
+
+/* 強調はカーソル(.is-selected)だけが担う。マウスのホバーも A/D も cursor を更新する
+   ため、ネイティブの :hover では描かない ── こうすると「後に行った入力」が常に勝つ。 */
+.card.is-selected {
+  transform: translateY(-10px) scale(1.03);
+  box-shadow:
+    0 0 0 4px var(--ink),
+    0 0 0 5px var(--accent),
+    0 0 32px color-mix(in srgb, var(--accent) 45%, transparent),
+    0 24px 50px rgba(0, 0, 0, 0.7);
+  outline: none;
+}
+
+.levelup-hint {
+  margin-top: 18px;
+  text-align: center;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: rgba(232, 220, 195, 0.6);
+}
+.levelup-hint kbd {
+  display: inline-block;
+  min-width: 1.5em;
+  padding: 1px 6px;
+  margin: 0 2px;
+  border: 1px solid rgba(232, 220, 195, 0.35);
+  border-radius: 4px;
+  background: rgba(232, 220, 195, 0.07);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  color: #e8dcc3;
+}
+
+@keyframes card-draw {
+  from {
+    opacity: 0;
+    transform: translateY(64px) rotateX(28deg) rotate(-3deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotateX(0) rotate(0);
+  }
+}
+
+.card-frame {
+  position: absolute;
+  inset: 6px;
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
+  border-radius: 9px;
+  pointer-events: none;
+}
+
+.card-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.32em;
+  text-indent: 0.32em;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+
+.card-icon {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  font-size: 34px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 38%, #241a3c, #120c1f 75%);
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 35%, transparent);
+  margin-bottom: 12px;
+}
+
+.card-name {
+  font-family: var(--font-display-jp);
+  font-weight: 800;
+  font-size: 17.5px;
+  letter-spacing: 0.1em;
+  margin-bottom: 2px;
+}
+
+.card-level {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--accent);
+  letter-spacing: 0.12em;
+  margin-bottom: 10px;
+}
+
+.card-desc {
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: var(--bone-dim);
+  white-space: pre-line;
+  flex: 1;
+}
+
+.card-hotkey {
+  margin-top: 12px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--bone-dim);
+  border: 1px solid var(--panel-edge);
+  border-radius: 5px;
+  padding: 1px 7px;
+}
+
+.card.is-new .card-tag {
+  color: var(--soul);
+}
+
+/* ---------- 共通パネル / ボタン ---------- */
+
+.panel {
+  background: linear-gradient(170deg, #1a1228, #110b1d);
+  border: 1px solid var(--panel-edge);
+  border-radius: 16px;
+  padding: clamp(26px, 4vw, 44px);
+  box-shadow: 0 0 0 4px var(--ink), 0 24px 60px rgba(0, 0, 0, 0.7);
+  text-align: center;
+  max-width: min(560px, 90vw);
+}
+
+.btn {
+  display: inline-block;
+  font-family: var(--font-display-jp);
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: 0.28em;
+  text-indent: 0.28em;
+  color: var(--bone);
+  background: linear-gradient(180deg, #7d1622, #4d0d15);
+  border: 1px solid var(--blood-bright);
+  border-radius: 10px;
+  padding: 13px 38px;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s;
+}
+
+.btn:hover,
+.btn:focus-visible {
+  transform: translateY(-2px);
+  filter: brightness(1.18);
+  box-shadow: 0 0 24px rgba(255, 77, 90, 0.35);
+}
+
+.btn.ghost {
+  background: transparent;
+  border-color: var(--panel-edge);
+  color: var(--bone-dim);
+}
+
+.btn.ghost:hover {
+  color: var(--bone);
+  border-color: var(--bone-dim);
+  box-shadow: none;
+}
+
+.btn-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  margin-top: 26px;
+}
+
+/* ---------- タイトル ---------- */
+
+.title-logo-en {
+  font-family: var(--font-display);
+  font-size: clamp(52px, 9vw, 96px);
+  line-height: 0.95;
+  color: var(--blood-bright);
+  text-shadow:
+    0 0 34px rgba(200, 50, 62, 0.55),
+    0 4px 0 #3a0d15;
+  letter-spacing: 0.04em;
+}
+
+.title-logo-jp {
+  font-family: var(--font-display-jp);
+  font-weight: 800;
+  font-size: clamp(15px, 2.2vw, 21px);
+  letter-spacing: 0.62em;
+  text-indent: 0.62em;
+  color: var(--bone);
+  margin-top: 10px;
+}
+
+.title-tagline {
+  margin-top: 18px;
+  font-size: 13px;
+  line-height: 1.9;
+  color: var(--bone-dim);
+}
+
+.controls-hint {
+  margin-top: 18px;
+  display: flex;
+  gap: 18px;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--bone-dim);
+  letter-spacing: 0.06em;
+}
+
+.controls-hint kbd {
+  border: 1px solid var(--panel-edge);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 1px 6px;
+  font-family: inherit;
+  color: var(--bone);
+  background: #1d1530;
+}
+
+/* ---------- ポーズ / 設定 ---------- */
+
+.pause-title,
+.end-title {
+  font-family: var(--font-display-jp);
+  font-weight: 800;
+  font-size: clamp(22px, 3.4vw, 32px);
+  letter-spacing: 0.4em;
+  text-indent: 0.4em;
+  margin-bottom: 6px;
+}
+
+.end-title.victory { color: var(--gold); text-shadow: 0 0 26px rgba(217, 164, 65, 0.5); }
+.end-title.defeat { color: var(--blood-bright); text-shadow: 0 0 26px rgba(255, 77, 90, 0.45); }
+
+/* リザルト画面の専用背景 ── 終了後に静止する盤面(canvas)を覆い隠す */
+.end-screen .panel { position: relative; z-index: 1; }
+.end-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+/* 勝利=夜明け: 下から温かい曙光が昇る */
+.end-screen.victory .end-backdrop {
+  background:
+    radial-gradient(120% 78% at 50% 116%, rgba(255, 196, 110, 0.42), rgba(217, 120, 80, 0.2) 34%, transparent 64%),
+    radial-gradient(90% 60% at 50% -10%, rgba(60, 40, 90, 0.5), transparent 60%),
+    linear-gradient(180deg, #0a0716 0%, #170f28 52%, #2a1626 100%);
+}
+/* 敗北=緋の沈降: 深い闇に血の残り火が滲む */
+.end-screen.defeat .end-backdrop {
+  background:
+    radial-gradient(110% 80% at 50% 120%, rgba(140, 22, 34, 0.4), transparent 58%),
+    radial-gradient(80% 70% at 78% 14%, rgba(120, 20, 30, 0.22), transparent 55%),
+    linear-gradient(180deg, #06030c 0%, #0a0512 60%, #0d0510 100%);
+}
+/* 周縁を一段沈めて題を引き立てる */
+.end-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 46%, transparent 42%, rgba(3, 1, 7, 0.62) 100%);
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(140px, 1fr));
+  gap: 10px 22px;
+  margin: 22px 0 4px;
+  text-align: left;
+}
+
+.stat-grid .k {
+  color: var(--bone-dim);
+  font-size: 12px;
+}
+
+.stat-grid .v {
+  font-family: var(--font-mono);
+  font-size: 19px;
+  color: var(--bone);
+}
+
+.settings {
+  margin-top: 20px;
+  border-top: 1px solid var(--panel-edge);
+  padding-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  text-align: left;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  font-size: 13.5px;
+}
+
+.toggle {
+  width: 44px;
+  height: 24px;
+  border-radius: 99px;
+  border: 1px solid var(--panel-edge);
+  background: #120c1f;
+  position: relative;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.toggle::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bone-dim);
+  transition: transform 0.15s, background 0.15s;
+}
+
+.toggle[aria-checked="true"] {
+  background: #4d0d15;
+  border-color: var(--blood-bright);
+}
+
+.toggle[aria-checked="true"]::after {
+  transform: translateX(20px);
+  background: var(--blood-bright);
+}
+
+input[type="range"] {
+  accent-color: var(--blood-bright);
+  width: 140px;
+}
+
+.build-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 14px;
+}
+
+/* ---------- アクセシビリティ ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    animation: none;
+  }
+  .card,
+  .btn,
+  .toggle,
+  .toggle::after,
+  .xpbar > div,
+  .bossbar .bar > div {
+    transition: none;
+  }
+}
+
+/* ============================================================
+   作り込み強化(デザイン)── タイトルのヒーロー演出
+   ============================================================ */
+
+/* 入場の段階表示 */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.title-scene {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 0 24px;
+}
+
+/* 段階的に立ち上がる各ブロック */
+.title-scene > * {
+  animation: rise-in 0.9s cubic-bezier(0.2, 0.85, 0.3, 1) backwards;
+}
+.title-scene > *:nth-child(1) { animation-delay: 0.05s; }
+.title-scene > *:nth-child(2) { animation-delay: 0.18s; }
+.title-scene > *:nth-child(3) { animation-delay: 0.32s; }
+.title-scene > *:nth-child(4) { animation-delay: 0.46s; }
+.title-scene > *:nth-child(5) { animation-delay: 0.60s; }
+
+/* 緋く灯る大ロゴ。微かに呼吸する */
+@keyframes logo-breathe {
+  0%, 100% { text-shadow: 0 0 30px rgba(200, 50, 62, 0.45), 0 0 70px rgba(200, 50, 62, 0.18), 0 4px 0 #3a0d15; }
+  50% { text-shadow: 0 0 42px rgba(200, 50, 62, 0.6), 0 0 96px rgba(200, 50, 62, 0.28), 0 4px 0 #3a0d15; }
+}
+
+.title-logo-en {
+  font-family: var(--font-display);
+  font-size: clamp(58px, 10vw, 116px);
+  line-height: 0.9;
+  color: #f0d9c4;
+  letter-spacing: 0.06em;
+  animation: logo-breathe 5.5s ease-in-out infinite;
+}
+
+/* 頭文字だけを緋に灯す装飾(ドロップキャップ風の強調) */
+.title-logo-en .glyph-lead {
+  color: var(--blood-bright);
+}
+
+.title-logo-jp {
+  font-family: var(--font-display-jp);
+  font-weight: 800;
+  font-size: clamp(15px, 2.2vw, 22px);
+  letter-spacing: 0.66em;
+  text-indent: 0.66em;
+  color: var(--bone);
+  margin-top: 14px;
+}
+
+/* アルカナ風の飾り罫(中央に月の意匠) */
+.ornament {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 20px;
+  color: var(--gold);
+  opacity: 0.85;
+}
+.ornament .rule {
+  height: 1px;
+  width: clamp(48px, 12vw, 120px);
+  background: linear-gradient(90deg, transparent, var(--gold));
+}
+.ornament .rule.right {
+  background: linear-gradient(90deg, var(--gold), transparent);
+}
+.ornament svg { display: block; }
+
+.title-tagline {
+  margin-top: 22px;
+  font-family: var(--font-display-jp);
+  font-size: clamp(12.5px, 1.6vw, 15px);
+  font-weight: 600;
+  line-height: 2;
+  letter-spacing: 0.14em;
+  color: var(--bone-dim);
+}
+
+/* 漂う残り火(タイトルの環境演出) */
+.embers {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+@keyframes ember-rise {
+  0% { transform: translateY(0) translateX(0); opacity: 0; }
+  10% { opacity: var(--ember-a, 0.7); }
+  90% { opacity: var(--ember-a, 0.7); }
+  100% { transform: translateY(-88vh) translateX(var(--ember-drift, 12px)); opacity: 0; }
+}
+.ember {
+  position: absolute;
+  bottom: -10px;
+  width: var(--ember-size, 3px);
+  height: var(--ember-size, 3px);
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffcf8a, rgba(200, 80, 50, 0));
+  animation: ember-rise var(--ember-dur, 9s) linear infinite;
+  animation-delay: var(--ember-delay, 0s);
+}
+
+/* ============================================================
+   アルカナカードの作り込み(シグネチャ)
+   ============================================================ */
+
+/* 上部のアルカナ位階(ローマ数字) */
+.card-rank {
+  position: absolute;
+  top: 12px;
+  left: 0;
+  right: 0;
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: 0.2em;
+  color: color-mix(in srgb, var(--accent) 70%, var(--bone));
+  text-align: center;
+  pointer-events: none;
+}
+
+/* 四隅の小さな菱(アルカナの目印) */
+.card-corner {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: var(--accent);
+  transform: rotate(45deg);
+  opacity: 0.7;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.card-corner.tl { top: 11px; left: 11px; }
+.card-corner.tr { top: 11px; right: 11px; }
+.card-corner.bl { bottom: 11px; left: 11px; }
+.card-corner.br { bottom: 11px; right: 11px; }
+
+/* アイコンの背後で静かに脈打つ光輪 */
+@keyframes halo-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.5; }
+  50% { transform: scale(1.12); opacity: 0.85; }
+}
+.card-icon {
+  position: relative;
+}
+.card-icon::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 30%, transparent), transparent 70%);
+  animation: halo-pulse 3.2s ease-in-out infinite;
+  z-index: -1;
+}
+
+/* 最終段階(マスタリー)のカードは金で彩られる */
+.card.is-mastery {
+  --accent: var(--gold);
+}
+.card.is-mastery .card-name {
+  color: var(--gold);
+  text-shadow: 0 0 16px rgba(217, 164, 65, 0.4);
+}
+
+/* カードを引くときの淡い帯光(上から下へ流れる) */
+@keyframes sheen {
+  from { transform: translateY(-120%); }
+  to { transform: translateY(220%); }
+}
+.card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.07), transparent);
+  transform: translateY(-120%);
+  pointer-events: none;
+}
+.card.is-selected::after {
+  animation: sheen 0.9s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title-scene > *,
+  .title-logo-en,
+  .ember,
+  .card-icon::before,
+  .card::after {
+    animation: none;
+  }
+  .ember { display: none; }
+}
+
+/* 位階の数字とタグが重ならないよう、カード上部に余白を確保 */
+.card { padding-top: 30px; }
+.card-tag { margin-top: 4px; }
+
+/* HUD の可読性: 画面上端に控えめなスクリムを敷き、明るい場面でも文字を読ませる */
+.hud-top::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: calc(150px * var(--hud-scale));
+  background: linear-gradient(180deg, rgba(6, 3, 12, 0.6), rgba(6, 3, 12, 0));
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* ============================================================
+   リキッドグラス統合 ── 全UIを一枚の「黒曜のガラス」で統一する
+   方針: 世界はすりガラス越しに凍結し、UIはその上に浮かぶ薄氷のように。
+         鏡面の上辺ハイライト + ゆっくり流れる光沢 + 浮遊する影。
+   ============================================================ */
+
+:root {
+  --glass-fill: rgba(28, 21, 46, 0.46);
+  --glass-fill-deep: rgba(18, 12, 30, 0.60);
+  --glass-blur: 22px;
+  --glass-edge: rgba(232, 220, 195, 0.16);
+  --glass-rim: rgba(255, 255, 255, 0.24);
+  --glass-shadow: 0 26px 64px rgba(0, 0, 0, 0.55);
+}
+
+/* 場面を凍らせ、すりガラス越しに世界を覗かせる(没入の核) */
+.overlay.dim {
+  background: radial-gradient(ellipse at 50% 42%, rgba(8, 4, 16, 0.28), rgba(4, 2, 9, 0.62));
+  -webkit-backdrop-filter: blur(8px) saturate(1.1) brightness(0.82);
+  backdrop-filter: blur(8px) saturate(1.1) brightness(0.82);
+}
+
+/* 共通のガラス材(すべての面が同じ素材であるという統一感) */
+.panel,
+.card,
+.chip,
+.slot,
+.btn,
+.toggle,
+.xpbar,
+.bossbar .bar {
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.5);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.5);
+}
+
+/* ゆっくり流れる鏡面光沢(液体ガラスの“動き”) */
+@keyframes glass-flow {
+  0%, 100% { transform: translateX(-65%); }
+  50% { transform: translateX(65%); }
+}
+
+/* ---- パネル(ポーズ / リザルト) ---- */
+.panel {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 42%),
+    var(--glass-fill-deep);
+  border: 1px solid var(--glass-edge);
+  box-shadow:
+    0 1px 0 var(--glass-rim) inset,
+    0 -26px 60px rgba(0, 0, 0, 0.28) inset,
+    var(--glass-shadow);
+}
+.panel::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  z-index: -1;
+  background: linear-gradient(118deg, transparent 38%, rgba(255, 255, 255, 0.05) 50%, transparent 62%);
+  transform: translateX(-65%);
+  animation: glass-flow 11s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ---- アルカナカード(薄氷の板。アクセント色で縁取る) ---- */
+.card {
+  background:
+    radial-gradient(ellipse at 50% -12%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 56%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 34%),
+    var(--glass-fill-deep);
+  border: 1px solid color-mix(in srgb, var(--accent) 52%, var(--glass-edge));
+  box-shadow:
+    0 1px 0 var(--glass-rim) inset,
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 22px 52px rgba(0, 0, 0, 0.6),
+    0 0 34px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.card.is-selected {
+  box-shadow:
+    0 1px 0 var(--glass-rim) inset,
+    0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent),
+    0 28px 60px rgba(0, 0, 0, 0.66),
+    0 0 44px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* ---- HUD チップ / スロット(生きた戦場が透ける) ---- */
+.chip {
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-edge);
+  box-shadow: 0 1px 0 var(--glass-rim) inset, 0 6px 18px rgba(0, 0, 0, 0.42);
+}
+.slot {
+  background: var(--glass-fill);
+  border: 1px solid color-mix(in srgb, var(--slot-color, var(--panel-edge)) 60%, var(--glass-edge));
+  box-shadow:
+    0 1px 0 var(--glass-rim) inset,
+    0 6px 16px rgba(0, 0, 0, 0.45),
+    0 0 14px color-mix(in srgb, var(--slot-color, var(--panel-edge)) 28%, transparent);
+}
+
+/* ---- ボタン(液状の緋い硝子) ---- */
+.btn {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0) 46%),
+    linear-gradient(180deg, rgba(166, 32, 44, 0.68), rgba(86, 15, 23, 0.62));
+  border: 1px solid rgba(255, 120, 130, 0.55);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.32) inset,
+    0 0 0 1px rgba(0, 0, 0, 0.28),
+    0 14px 32px rgba(120, 10, 20, 0.42),
+    0 0 22px rgba(255, 77, 90, 0.16);
+}
+.btn:hover,
+.btn:focus-visible {
+  transform: translateY(-2px);
+  filter: brightness(1.12);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.42) inset,
+    0 16px 38px rgba(150, 12, 24, 0.5),
+    0 0 32px rgba(255, 77, 90, 0.42);
+}
+.btn.ghost {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 42%),
+    var(--glass-fill);
+  border: 1px solid var(--glass-edge);
+  box-shadow: 0 1px 0 var(--glass-rim) inset, 0 10px 24px rgba(0, 0, 0, 0.42);
+  color: var(--bone-dim);
+}
+.btn.ghost:hover {
+  color: var(--bone);
+  border-color: var(--bone-dim);
+  box-shadow: 0 1px 0 var(--glass-rim) inset, 0 12px 28px rgba(0, 0, 0, 0.5);
+}
+
+/* ---- トグル(硝子の溝) ---- */
+.toggle {
+  background: rgba(18, 12, 30, 0.5);
+  border: 1px solid var(--glass-edge);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 3px rgba(0, 0, 0, 0.4);
+}
+.toggle[aria-checked="true"] {
+  background: rgba(122, 20, 32, 0.55);
+  border-color: var(--blood-bright);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 0 16px rgba(255, 77, 90, 0.4);
+}
+.toggle::after {
+  background: linear-gradient(180deg, #f3ead8, var(--bone-dim));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+.toggle[aria-checked="true"]::after {
+  background: linear-gradient(180deg, #ffd6db, var(--blood-bright));
+}
+
+/* ---- バー類(硝子の管) ---- */
+.xpbar,
+.bossbar .bar {
+  background: rgba(18, 12, 30, 0.42);
+  border: 1px solid var(--glass-edge);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -2px 6px rgba(0, 0, 0, 0.42);
+}
+.xpbar > div {
+  box-shadow: 0 0 12px rgba(79, 216, 196, 0.5);
+}
+.bossbar .bar > div {
+  box-shadow: 0 0 12px rgba(255, 77, 90, 0.5);
+}
+
+/* 飾り罫も硝子の色味へ寄せ、統一感を保つ */
+.controls-hint kbd {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0)),
+    rgba(28, 21, 46, 0.5);
+  border-color: var(--glass-edge);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel::before { animation: none; }
+}
+
+/* ============================================================
+   真化(進化)カード ＆ 流派の紋章 ── 同じ「黒曜のガラス」素材で統一する
+   真化カードは到達の頂点。金白の光を宿しつつ、面はあくまで一枚の硝子。
+   ============================================================ */
+
+/* ---- 真化カード ---- */
+.card.is-evolution {
+  border-color: rgba(255, 233, 168, 0.85);
+  /* 描画時のドロー演出のあと、金の鼓動をループさせる */
+  animation:
+    card-draw 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.15) backwards,
+    evo-pulse 2.6s ease-in-out 0.5s infinite;
+}
+@keyframes evo-pulse {
+  0%, 100% {
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.5) inset,
+      0 0 0 1px rgba(255, 220, 150, 0.5),
+      0 22px 52px rgba(0, 0, 0, 0.62),
+      0 0 38px rgba(255, 205, 120, 0.32);
+  }
+  50% {
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.6) inset,
+      0 0 0 1px rgba(255, 232, 170, 0.7),
+      0 26px 58px rgba(0, 0, 0, 0.66),
+      0 0 66px rgba(255, 205, 120, 0.6);
+  }
+}
+/* 常時流れる鏡面光沢(液体ガラスの“格”を最上位カードへ) */
+.card.is-evolution::after { animation: sheen 2.8s ease-in-out 0.6s infinite; }
+.card.is-evolution .card-rank,
+.card.is-evolution .card-tag {
+  color: #ffe9a8;
+  text-shadow: 0 0 12px rgba(255, 210, 130, 0.6);
+}
+.card.is-evolution .card-name {
+  color: #fff3d6;
+  text-shadow: 0 0 18px rgba(255, 210, 130, 0.5);
+}
+
+/* 専用技(スキン秘伝)── 紫の格を与える */
+.card.is-signature {
+  border-color: rgba(192, 138, 255, 0.85);
+  animation:
+    card-draw 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.15) backwards,
+    sig-pulse 2.6s ease-in-out 0.5s infinite;
+}
+@keyframes sig-pulse {
+  0%, 100% {
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.5) inset,
+      0 0 0 1px rgba(192, 138, 255, 0.5),
+      0 22px 52px rgba(0, 0, 0, 0.62),
+      0 0 38px rgba(150, 100, 230, 0.32);
+  }
+  50% {
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.6) inset,
+      0 0 0 1px rgba(208, 170, 255, 0.7),
+      0 26px 58px rgba(0, 0, 0, 0.66),
+      0 0 66px rgba(160, 110, 240, 0.6);
+  }
+}
+.card.is-signature::after { animation: sheen 2.8s ease-in-out 0.6s infinite; }
+.card.is-signature .card-rank,
+.card.is-signature .card-tag {
+  color: #d8bcff;
+  text-shadow: 0 0 12px rgba(176, 120, 255, 0.6);
+}
+.card.is-signature .card-name {
+  color: #efe2ff;
+  text-shadow: 0 0 18px rgba(176, 120, 255, 0.5);
+}
+.card-lineage {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  flex-wrap: wrap;
+}
+.card-lineage .arrow {
+  color: #ffd98a;
+  filter: drop-shadow(0 0 6px rgba(255, 200, 110, 0.6));
+}
+
+/* ---- 流派の紋章(ポーズメニューのシナジー表示) ---- */
+.crest-panel { margin: 2px 0 4px; }
+.crest-title {
+  font-family: var(--font-display-jp);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.26em;
+  text-indent: 0.26em;
+  color: var(--bone-dim);
+  text-align: center;
+  margin-bottom: 9px;
+}
+.crest-row { display: flex; flex-direction: column; gap: 7px; }
+.crest {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-edge);
+  box-shadow: 0 1px 0 var(--glass-rim) inset, 0 6px 16px rgba(0, 0, 0, 0.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+.crest.tier-1 {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--glass-edge));
+  box-shadow: 0 1px 0 var(--glass-rim) inset, 0 0 18px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+.crest.tier-2 {
+  border-color: var(--accent);
+  box-shadow: 0 1px 0 var(--glass-rim) inset, 0 0 28px color-mix(in srgb, var(--accent) 46%, transparent);
+}
+.crest-glyph {
+  font-size: 20px;
+  line-height: 1;
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 60%, transparent));
+}
+.crest.tier-0 .crest-glyph { filter: grayscale(0.5) opacity(0.7); }
+.crest-meta { display: flex; flex-direction: column; flex: 1; gap: 1px; min-width: 0; }
+.crest-name {
+  font-family: var(--font-display-jp);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--bone);
+  display: flex;
+  gap: 7px;
+  align-items: baseline;
+}
+.crest-count { font-family: var(--font-mono); font-size: 11px; color: var(--accent); }
+.crest-bonus { font-size: 11px; color: var(--bone-dim); }
+.crest.tier-0 .crest-bonus { opacity: 0.65; }
+.crest-pips { display: flex; gap: 4px; }
+.crest-pips i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 0 0 1px var(--glass-edge);
+}
+.crest-pips i.on { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+
+/* ---- 流派の紋章(ライブHUDの発現中バッジ) ---- */
+.hud-crest {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(28px * var(--hud-scale));
+  height: calc(28px * var(--hud-scale));
+  font-size: calc(15px * var(--hud-scale));
+  border-radius: 9px;
+  background: var(--glass-fill);
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--glass-edge));
+  box-shadow: 0 1px 0 var(--glass-rim) inset, 0 0 12px color-mix(in srgb, var(--accent) 30%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+}
+.hud-crest.tier-2 {
+  border-color: var(--accent);
+  box-shadow: 0 1px 0 var(--glass-rim) inset, 0 0 18px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.hud-crest-star {
+  position: absolute;
+  top: -5px;
+  right: -4px;
+  font-size: calc(9px * var(--hud-scale));
+  color: var(--accent);
+  filter: drop-shadow(0 0 4px var(--accent));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card.is-evolution { animation: none; }
+  .card.is-evolution::after { animation: none; }
+  .card.is-signature { animation: none; }
+  .card.is-signature::after { animation: none; }
+}
+
+/* ============================================================
+   ホームのハブ / 記録の間(コーデックス) ── 同じ黒曜のガラスで統一
+   ============================================================ */
+
+/* ホームの戦績ダイジェスト */
+.home-stats {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.home-stats span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 76px;
+  padding: 8px 10px 7px;
+  border-radius: 11px;
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-edge);
+  box-shadow: 0 1px 0 var(--glass-rim) inset, 0 6px 16px rgba(0, 0, 0, 0.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--bone);
+}
+.home-stats .hs-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--gold);
+  filter: drop-shadow(0 0 5px rgba(217, 164, 65, 0.4));
+}
+.home-stats i {
+  font-style: normal;
+  font-family: var(--font-display-jp);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  color: var(--bone-dim);
+}
+
+/* タスクバーヒーロー(ホームの自動戦闘・メニューの裏側に敷く帯) */
+.taskbar-hero {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 86px;
+  z-index: 0; /* .title-scene(メニュー)の裏 */
+  pointer-events: none;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+.tbh-ground {
+  position: absolute;
+  left: 0; right: 0; bottom: 18px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--gold) 55%, transparent), transparent);
+  box-shadow: 0 0 14px rgba(217, 164, 65, 0.25);
+}
+.tbh-stage { position: absolute; inset: 0; }
+.tbh-hero-wrap, .tbh-foe-wrap {
+  position: absolute;
+  bottom: 18px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  will-change: left, opacity;
+}
+.tbh-hero { width: 44px; height: 44px; filter: drop-shadow(0 0 10px rgba(217, 164, 65, 0.5)); }
+.tbh-hero.hit { filter: drop-shadow(0 0 10px rgba(255, 80, 96, 0.85)); }
+.tbh-foe {
+  width: 36px; height: 36px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6)) saturate(0.92);
+}
+.tbh-foe.hit {
+  filter: drop-shadow(0 0 7px rgba(255, 255, 255, 0.95)) brightness(2.4);
+}
+/* ヒーローの斬撃モーション(前方へ薙ぐ弧) */
+.tbh-swing {
+  position: absolute;
+  left: 72%;
+  bottom: 8px;
+  color: #fff2c4;
+  filter: drop-shadow(0 0 6px rgba(255, 220, 130, 0.9));
+  pointer-events: none;
+}
+/* 斬撃の着弾(斬閃) */
+.tbh-strike {
+  position: absolute;
+  bottom: 34px;
+  color: #ffe6a0;
+  filter: drop-shadow(0 0 6px rgba(255, 210, 120, 0.9));
+  pointer-events: none;
+}
+.tbh-strike.crit { color: #ff9a5a; filter: drop-shadow(0 0 9px rgba(255, 140, 80, 0.95)); }
+.tbh-hp, .tbh-foehp {
+  width: 38px; height: 3px; border-radius: 99px;
+  background: rgba(10, 6, 16, 0.8);
+  overflow: hidden;
+}
+.tbh-foehp { width: 28px; height: 2.5px; }
+.tbh-hp > i { display: block; height: 100%; background: linear-gradient(90deg, #c8323e, #5ee08a); transition: width 0.12s linear; }
+.tbh-foehp > i { display: block; height: 100%; background: #d8556a; transition: width 0.12s linear; }
+.tbh-pop {
+  position: absolute;
+  transform: translateX(-50%);
+  font-family: var(--font-display-jp);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: #ffe0a0;
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+}
+.tbh-pop.crit { color: #ff9a6e; font-size: 13px; }
+.tbh-pop.hurt { color: #ff7383; font-size: 10px; }
+.tbh-pop.reset { color: #cdbcff; font-size: 12px; }
+.tbh-pop.wave { color: var(--gold); font-size: 13px; letter-spacing: 0.16em; }
+.tbh-readout {
+  position: absolute;
+  left: 14px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--bone-dim);
+  opacity: 0.92;
+}
+.tbh-readout .tbh-lv { color: var(--gold); font-size: 13px; }
+.tbh-gear { display: inline-flex; gap: 4px; }
+.tbh-gear i {
+  display: grid;
+  place-items: center;
+  width: 16px; height: 16px;
+  font-style: normal;
+  font-size: 9px;
+  border-radius: 4px;
+  color: var(--rar);
+  border: 1px solid color-mix(in srgb, var(--rar) 55%, transparent);
+  background: color-mix(in srgb, var(--rar) 14%, transparent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--rar) 35%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tbh-foe { transition: none; }
+}
+
+/* 称号獲得(リザルト) */
+.end-unlocks {
+  margin: 4px 0 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.end-unlocks-title {
+  font-family: var(--font-display-jp);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  color: var(--gold);
+  text-align: center;
+}
+.end-unlock {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-radius: 11px;
+  background:
+    linear-gradient(180deg, rgba(217, 164, 65, 0.12), rgba(217, 164, 65, 0) 60%),
+    var(--glass-fill);
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--glass-edge));
+  box-shadow: 0 1px 0 var(--glass-rim) inset, 0 0 18px rgba(217, 164, 65, 0.2);
+}
+.end-unlock .glyph { font-size: 20px; filter: drop-shadow(0 0 6px rgba(217, 164, 65, 0.6)); }
+.end-unlock .meta { display: flex; flex-direction: column; gap: 1px; }
+.end-unlock .name { font-family: var(--font-display-jp); font-weight: 700; font-size: 13px; color: var(--bone); }
+.end-unlock .desc { font-size: 11px; color: var(--bone-dim); }
+
+/* ---- コーデックス本体 ---- */
+.panel.codex {
+  width: min(680px, 92vw);
+  max-width: 680px;
+}
+.codex-title {
+  font-family: var(--font-display-jp);
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  color: var(--bone);
+  text-align: center;
+  margin-bottom: 12px;
+}
+.codex-tabs {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+.codex-tab {
+  flex: 1;
+  max-width: 130px;
+  padding: 9px 0;
+  border-radius: 11px;
+  font-family: var(--font-display-jp);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  color: var(--bone-dim);
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-edge);
+  box-shadow: 0 1px 0 var(--glass-rim) inset;
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.codex-tab:hover { color: var(--bone); }
+.codex-tab.active {
+  color: var(--blood-bright);
+  border-color: color-mix(in srgb, var(--blood-bright) 55%, var(--glass-edge));
+  box-shadow: 0 1px 0 var(--glass-rim) inset, 0 0 18px rgba(255, 77, 90, 0.28);
+}
+.codex-body {
+  max-height: min(56vh, 460px);
+  overflow-y: auto;
+  padding: 2px 6px 2px 2px;
+  margin: 0 -4px;
+}
+.codex-body::-webkit-scrollbar { width: 8px; }
+.codex-body::-webkit-scrollbar-thumb { background: rgba(232, 220, 195, 0.16); border-radius: 8px; }
+
+.codex-section-title {
+  font-family: var(--font-display-jp);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.26em;
+  text-indent: 0.26em;
+  color: var(--gold);
+  margin: 14px 2px 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.codex-section-title:first-child { margin-top: 4px; }
+.codex-progress {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: normal;
+  color: var(--bone-dim);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-edge);
+}
+
+/* 記録タブ */
+.codex-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.codex-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-edge);
+  box-shadow: 0 1px 0 var(--glass-rim) inset, 0 6px 16px rgba(0, 0, 0, 0.38);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+}
+.codex-stat .k { font-family: var(--font-display-jp); font-size: 10.5px; letter-spacing: 0.14em; color: var(--bone-dim); }
+.codex-stat .v { font-family: var(--font-mono); font-size: 19px; color: var(--bone); }
+.codex-note { font-size: 11.5px; color: var(--bone-dim); text-align: center; margin: 12px 0 4px; }
+.codex-reset {
+  display: block;
+  margin: 6px auto 2px;
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: color-mix(in srgb, var(--blood-bright) 80%, var(--bone-dim));
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--blood) 40%, var(--glass-edge));
+  cursor: pointer;
+}
+.codex-reset:hover { color: var(--blood-bright); border-color: var(--blood-bright); }
+
+/* 図鑑 / 武具のセル */
+.codex-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 9px;
+}
+.codex-grid.small { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); }
+.codex-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+  padding: 14px 10px 12px;
+  border-radius: 13px;
+  background:
+    radial-gradient(ellipse at 50% -10%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 58%),
+    var(--glass-fill);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--glass-edge));
+  box-shadow: 0 1px 0 var(--glass-rim) inset, 0 6px 16px rgba(0, 0, 0, 0.42), 0 0 16px color-mix(in srgb, var(--accent) 14%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+}
+.codex-cell.locked {
+  border-color: var(--glass-edge);
+  box-shadow: 0 1px 0 var(--glass-rim) inset, 0 6px 16px rgba(0, 0, 0, 0.42);
+  filter: grayscale(0.6);
+  opacity: 0.72;
+}
+.codex-cell-face { font-size: 30px; line-height: 1; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5)); }
+.codex-cell-name { font-family: var(--font-display-jp); font-weight: 700; font-size: 13px; color: var(--bone); }
+.codex-cell-desc { font-size: 10.5px; line-height: 1.5; color: var(--bone-dim); }
+.codex-cell-stat { font-family: var(--font-mono); font-size: 10.5px; color: color-mix(in srgb, var(--accent) 75%, var(--bone)); margin-top: 2px; }
+.codex-school-tag {
+  margin-top: 4px;
+  font-family: var(--font-display-jp);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: color-mix(in srgb, var(--accent) 80%, var(--bone));
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--glass-edge));
+}
+
+/* 真化レシピ */
+.codex-evos { display: flex; flex-direction: column; gap: 8px; }
+.codex-evo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 13px;
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-edge);
+  box-shadow: 0 1px 0 var(--glass-rim) inset, 0 6px 16px rgba(0, 0, 0, 0.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+  filter: grayscale(0.5);
+  opacity: 0.78;
+  transition: filter 0.3s ease, opacity 0.3s ease, box-shadow 0.3s ease;
+}
+.codex-evo.unlocked {
+  filter: none;
+  opacity: 1;
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--glass-edge));
+  box-shadow: 0 1px 0 var(--glass-rim) inset, 0 0 24px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+.evo-from { display: inline-flex; align-items: center; gap: 4px; font-size: 20px; }
+.evo-from .evo-plus { font-size: 12px; color: var(--bone-dim); }
+.evo-from .req { font-size: 17px; filter: drop-shadow(0 0 6px rgba(217, 164, 65, 0.5)); }
+.evo-arrow { color: var(--gold); filter: drop-shadow(0 0 6px rgba(217, 164, 65, 0.5)); }
+.evo-to { display: flex; flex-direction: column; gap: 1px; flex: 1; }
+.evo-to > b { font-size: 22px; line-height: 1; }
+.evo-name { font-family: var(--font-display-jp); font-weight: 700; font-size: 13px; color: color-mix(in srgb, var(--accent) 70%, var(--bone)); }
+.evo-recipe { font-size: 10px; color: var(--bone-dim); }
+
+/* 称号 */
+.codex-honors { display: flex; flex-direction: column; gap: 7px; }
+.codex-honor {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-edge);
+  box-shadow: 0 1px 0 var(--glass-rim) inset, 0 6px 16px rgba(0, 0, 0, 0.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+  opacity: 0.66;
+  filter: grayscale(0.7);
+}
+.codex-honor.unlocked {
+  opacity: 1;
+  filter: none;
+  border-color: color-mix(in srgb, var(--gold) 45%, var(--glass-edge));
+  box-shadow: 0 1px 0 var(--glass-rim) inset, 0 0 20px rgba(217, 164, 65, 0.2);
+}
+.honor-glyph { font-size: 22px; width: 30px; text-align: center; }
+.codex-honor.unlocked .honor-glyph { filter: drop-shadow(0 0 7px rgba(217, 164, 65, 0.55)); }
+.honor-meta { display: flex; flex-direction: column; gap: 1px; }
+.honor-name { font-family: var(--font-display-jp); font-weight: 700; font-size: 13.5px; color: var(--bone); }
+.honor-desc { font-size: 11px; color: var(--bone-dim); }
+
+/* ============================================================
+   モード選択 ＆ スキルカードの差別化(チップ/ピップ/ステータス)
+   ── すべて黒曜のガラスで統一
+   ============================================================ */
+
+/* ---- モード選択 ---- */
+.panel.modeselect { width: min(660px, 93vw); max-width: 660px; }
+.ms-title {
+  font-family: var(--font-display-jp);
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  color: var(--bone);
+  text-align: center;
+  margin-bottom: 14px;
+}
+.ms-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 560px) { .ms-grid { grid-template-columns: 1fr; } }
+.ms-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  text-align: left;
+  padding: 14px 15px 13px;
+  border-radius: 14px;
+  cursor: pointer;
+  background:
+    radial-gradient(ellipse at 0% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 60%),
+    var(--glass-fill);
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--glass-edge));
+  box-shadow: 0 1px 0 var(--glass-rim) inset, 0 8px 22px rgba(0, 0, 0, 0.46);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+  transition: transform 0.18s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.ms-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--accent);
+  box-shadow: 0 1px 0 var(--glass-rim) inset, 0 14px 30px rgba(0, 0, 0, 0.55), 0 0 26px color-mix(in srgb, var(--accent) 32%, transparent);
+}
+.ms-card-head { display: flex; align-items: baseline; gap: 10px; }
+.ms-name {
+  font-family: var(--font-display-jp);
+  font-weight: 800;
+  font-size: 19px;
+  letter-spacing: 0.1em;
+  color: var(--bone);
+}
+.ms-tag {
+  font-family: var(--font-display-jp);
+  font-size: 11.5px;
+  color: var(--accent);
+  letter-spacing: 0.08em;
+}
+.ms-desc { font-size: 11.5px; line-height: 1.65; color: var(--bone-dim); min-height: 38px; }
+.ms-best {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--bone);
+  padding-top: 7px;
+  border-top: 1px solid var(--glass-edge);
+}
+.ms-best i { font-style: normal; font-family: var(--font-display-jp); font-size: 9.5px; letter-spacing: 0.12em; color: var(--bone-dim); margin-right: 5px; }
+.ms-clear {
+  font-family: var(--font-display-jp);
+  font-size: 10.5px;
+  color: #0b0712;
+  background: var(--accent);
+  padding: 1px 8px;
+  border-radius: 999px;
+}
+.ms-none { color: var(--bone-dim); font-family: var(--font-display-jp); font-size: 11px; opacity: 0.75; }
+
+/* ---- カードの流派チップ・型タグ ---- */
+.card-chips {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: -2px 0 2px;
+}
+.card-school {
+  font-family: var(--font-display-jp);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  color: color-mix(in srgb, var(--sc) 82%, var(--bone));
+  padding: 1.5px 7px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--sc) 45%, var(--glass-edge));
+  white-space: nowrap;
+}
+.card-arche {
+  font-family: var(--font-display-jp);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  color: var(--bone-dim);
+  padding: 1.5px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-edge);
+  background: rgba(255, 255, 255, 0.03);
+  white-space: nowrap;
+}
+
+/* ---- レベルピップ ---- */
+.card-pips {
+  display: flex;
+  gap: 3px;
+  justify-content: center;
+  margin: 1px 0 3px;
+}
+.card-pips i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 0 0 1px var(--glass-edge);
+}
+.card-pips i.on {
+  background: var(--accent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+/* ---- ステータスバッジ ---- */
+.card-stats {
+  display: flex;
+  gap: 5px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 2px 0 4px;
+}
+.stat-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--bone);
+  padding: 2px 7px;
+  border-radius: 7px;
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-edge);
+  box-shadow: 0 1px 0 var(--glass-rim) inset;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stat-badge i {
+  font-style: normal;
+  font-family: var(--font-display-jp);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--bone-dim);
+}
+.stat-badge.up { color: var(--soul); border-color: color-mix(in srgb, var(--soul) 35%, var(--glass-edge)); }
+.is-evolution .card-stats .stat-badge { color: #fff3d6; border-color: rgba(255, 220, 150, 0.4); }
+
+/* ============================================================
+   HUD 刷新 ── 体力バー・レベル・スロット進捗・モード対応タイマー・低HP警告
+   既存のグラス材を踏襲しつつ、最も長く見る面の可読性と手応えを上げる。
+   ============================================================ */
+
+/* 体力 + レベルのまとまり */
+.vitals {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--hud-scale));
+}
+.lvl-orb {
+  position: relative;
+  width: calc(40px * var(--hud-scale));
+  height: calc(40px * var(--hud-scale));
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(217, 164, 65, 0.25), rgba(217, 164, 65, 0) 70%),
+    var(--glass-fill);
+  border: 1px solid color-mix(in srgb, var(--gold) 55%, var(--glass-edge));
+  box-shadow: 0 1px 0 var(--glass-rim) inset, 0 6px 16px rgba(0, 0, 0, 0.45), 0 0 14px rgba(217, 164, 65, 0.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+}
+.lvl-orb .cap {
+  font-family: var(--font-display-jp);
+  font-size: calc(8px * var(--hud-scale));
+  letter-spacing: 0.18em;
+  color: var(--gold);
+  margin-bottom: 1px;
+}
+.lvl-orb .n {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: calc(17px * var(--hud-scale));
+  color: var(--bone);
+}
+
+.hpbar {
+  position: relative;
+  width: calc(168px * var(--hud-scale));
+  height: calc(22px * var(--hud-scale));
+  border-radius: 99px;
+  overflow: hidden;
+  background: rgba(18, 12, 30, 0.5);
+  border: 1px solid var(--glass-edge);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -2px 6px rgba(0, 0, 0, 0.45), 0 4px 12px rgba(0, 0, 0, 0.4);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+.hp-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #7d1622, var(--blood-bright));
+  box-shadow: 0 0 14px rgba(255, 77, 90, 0.5);
+  transition: width 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.hp-num {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-family: var(--font-mono);
+  font-size: calc(12px * var(--hud-scale));
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+}
+.hp-num strong { color: #fff; font-weight: 600; }
+.hp-num i { color: rgba(255, 255, 255, 0.7); font-style: normal; }
+.hpbar.low { border-color: var(--blood-bright); animation: hp-throb 0.9s ease-in-out infinite; }
+@keyframes hp-throb {
+  0%, 100% { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 0 rgba(255, 60, 75, 0); }
+  50% { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 18px rgba(255, 60, 75, 0.55); }
+}
+
+/* HP とスタミナの縦並び */
+.bars { display: flex; flex-direction: column; gap: calc(4px * var(--hud-scale)); }
+.stambar {
+  position: relative;
+  width: calc(168px * var(--hud-scale));
+  height: calc(7px * var(--hud-scale));
+  border-radius: 99px;
+  overflow: hidden;
+  background: rgba(18, 12, 30, 0.5);
+  border: 1px solid var(--glass-edge);
+  box-shadow: inset 0 -1px 4px rgba(0, 0, 0, 0.4);
+}
+.stam-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  height: 100%;
+  border-radius: 99px;
+  /* スタミナ不足(回避不可)のときは琥珀で控えめに、足りたら霊碧に灯す */
+  background: linear-gradient(90deg, #6a5224, #caa46a);
+  opacity: 0.85;
+  transition: width 0.1s linear;
+}
+.stambar.ready .stam-fill {
+  background: linear-gradient(90deg, #2f6f7a, #8fe6ff);
+  opacity: 1;
+  box-shadow: 0 0 8px rgba(111, 211, 255, 0.5);
+}
+
+/* スロット列のまとまり */
+.slots-wrap { display: flex; flex-direction: column; gap: calc(5px * var(--hud-scale)); }
+
+/* スロット: アイコン + レベル + レベル進捗の底バー */
+.slot { overflow: hidden; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+.slot-icon { line-height: 1; }
+.slot-fill {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: calc(3px * var(--hud-scale));
+  background: var(--slot-color, var(--gold));
+  box-shadow: 0 0 6px color-mix(in srgb, var(--slot-color, var(--gold)) 70%, transparent);
+  transition: width 0.3s ease;
+}
+.slot.maxed {
+  border-color: color-mix(in srgb, var(--slot-color) 85%, #fff);
+  box-shadow:
+    0 1px 0 var(--glass-rim) inset,
+    0 6px 16px rgba(0, 0, 0, 0.45),
+    0 0 16px color-mix(in srgb, var(--slot-color) 55%, transparent);
+}
+.slot.evolved {
+  border-color: rgba(255, 233, 168, 0.9);
+  box-shadow: 0 1px 0 var(--glass-rim) inset, 0 6px 16px rgba(0, 0, 0, 0.45), 0 0 18px rgba(255, 205, 120, 0.5);
+}
+.slot-star {
+  position: absolute;
+  top: calc(-6px * var(--hud-scale));
+  left: calc(-5px * var(--hud-scale));
+  font-size: calc(11px * var(--hud-scale));
+  color: #ffe9a8;
+  filter: drop-shadow(0 0 4px rgba(255, 210, 130, 0.7));
+}
+
+/* 右肩: 討伐 + 紋章 */
+.hud-crests { display: flex; gap: calc(5px * var(--hud-scale)); }
+
+/* タイマー(中央): 時刻 + 夜明けの目標と進捗 */
+.hud-timer {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: calc(20px * var(--hud-scale));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(2px * var(--hud-scale));
+}
+.hud-timer .t {
+  font-family: var(--font-display);
+  font-size: calc(36px * var(--hud-scale));
+  letter-spacing: 0.08em;
+  color: var(--bone);
+  text-shadow: 0 0 18px rgba(200, 50, 62, 0.5), 0 2px 0 rgba(0, 0, 0, 0.8);
+  line-height: 1;
+}
+.hud-timer .dawn {
+  font-family: var(--font-display-jp);
+  font-size: calc(10px * var(--hud-scale));
+  letter-spacing: 0.16em;
+  color: var(--bone-dim);
+}
+.hud-timer .dawn-track {
+  width: calc(120px * var(--hud-scale));
+  height: calc(3px * var(--hud-scale));
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  margin-top: 1px;
+}
+.hud-timer .dawn-fill {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--blood), var(--gold));
+  box-shadow: 0 0 8px rgba(217, 164, 65, 0.5);
+  transition: width 0.4s linear;
+}
+
+/* 低HP警告(画面端の緋い明滅) */
+.lowhp-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  box-shadow: inset 0 0 140px 24px rgba(200, 30, 44, 0.0);
+  animation: lowhp-pulse 1.1s ease-in-out infinite;
+}
+@keyframes lowhp-pulse {
+  0%, 100% { box-shadow: inset 0 0 120px 20px rgba(200, 30, 44, 0.12); }
+  50% { box-shadow: inset 0 0 180px 40px rgba(220, 36, 52, 0.34); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hpbar.low, .lowhp-vignette { animation: none; }
+}
+
+/* ============================================================
+   仕上げの所作 ── 入場アニメと操作フィードバック(全UI共通)
+   ============================================================ */
+
+/* パネルの入場(下からせり上がり、薄氷が結露するように) */
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+.panel { animation: panel-in 0.42s cubic-bezier(0.2, 0.85, 0.3, 1) backwards; }
+
+/* ボタンの押下(硝子を押し込む手応え) */
+.btn:active { transform: translateY(0); filter: brightness(0.96); transition: transform 0.06s ease, filter 0.06s ease; }
+.ms-card:active { transform: translateY(-1px) scale(0.995); }
+
+/* キーボード操作の明示(アクセシビリティ) */
+.btn:focus-visible,
+.codex-tab:focus-visible,
+.ms-card:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* HUD の出入り(プレイ開始/終了でふっと現れる) */
+@keyframes hud-in { from { opacity: 0; } to { opacity: 1; } }
+.hud { animation: hud-in 0.5s ease backwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .panel, .hud { animation: none; }
+}
+
+/* ============================================================
+   図鑑のモンスター肖像(実スプライト) ＆ 称号の刻印(SVGシジル)
+   ── 絵文字を廃し、世界観に統一する
+   ============================================================ */
+
+/* 図鑑: 実際のゲーム内スプライトを肖像として表示 */
+.codex-portrait-wrap {
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 2px;
+}
+.codex-portrait {
+  max-height: 46px;
+  max-width: 64px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  image-rendering: auto;
+  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.55));
+}
+/* 未発見はシルエット(形だけ覗かせる) */
+.codex-portrait.silhouette {
+  filter: brightness(0) saturate(0) opacity(0.42) drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 40%, transparent));
+}
+
+/* 称号の刻印(SVG) */
+.honor-glyph {
+  width: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--bone-dim);
+}
+.honor-glyph svg { width: 23px; height: 23px; }
+.codex-honor.unlocked .honor-glyph {
+  color: var(--gold);
+  filter: drop-shadow(0 0 6px rgba(217, 164, 65, 0.5));
+}
+
+/* リザルトの称号獲得 */
+.end-unlock .glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gold);
+  filter: drop-shadow(0 0 6px rgba(217, 164, 65, 0.55));
+}
+.end-unlock .glyph svg { width: 22px; height: 22px; }
+
+/* ============================================================
+   祭壇(恒久強化 + 装い)
+   ============================================================ */
+.altar {
+  width: min(720px, 94vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: linear-gradient(170deg, #1a1228, #110b1d);
+  border: 1px solid var(--panel-edge);
+  border-radius: 16px;
+  padding: clamp(20px, 3.4vw, 36px);
+  box-shadow: 0 0 0 4px var(--ink), 0 24px 60px rgba(0, 0, 0, 0.7);
+}
+.altar::-webkit-scrollbar { width: 8px; }
+.altar::-webkit-scrollbar-thumb { background: rgba(232, 220, 195, 0.16); border-radius: 8px; }
+
+.altar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.altar-title {
+  font-family: var(--font-display-jp);
+  font-weight: 800;
+  font-size: 24px;
+  letter-spacing: 0.34em;
+  text-indent: 0.34em;
+  color: var(--bone);
+}
+.souls-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--glass-fill-deep);
+  border: 1px solid color-mix(in srgb, var(--gold) 40%, var(--glass-edge));
+  box-shadow: 0 0 18px rgba(217, 164, 65, 0.18) inset;
+}
+.souls-badge b { font-family: var(--font-mono); font-size: 18px; color: var(--gold); }
+.souls-badge i { font-style: normal; font-size: 11px; color: var(--bone-dim); letter-spacing: 0.1em; }
+.souls-ico { width: 18px; height: 18px; color: var(--gold); }
+
+.altar-sub {
+  color: var(--bone-dim);
+  font-size: 12.5px;
+  margin: 6px 0 10px;
+}
+.altar-section-label {
+  font-family: var(--font-display-jp);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.28em;
+  text-indent: 0.28em;
+  color: var(--gold);
+  margin: 20px 0 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--panel-edge);
+}
+
+/* 恒久強化グリッド */
+.upgrade-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+@media (max-width: 560px) { .upgrade-grid { grid-template-columns: 1fr; } }
+.upgrade {
+  --accent: var(--gold);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-edge);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+}
+.upgrade.maxed {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--glass-edge));
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.upgrade-top { display: flex; align-items: center; gap: 9px; }
+.upgrade-ico {
+  display: inline-flex;
+  width: 26px; height: 26px;
+  color: var(--accent);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 50%, transparent));
+}
+.upgrade-ico svg { width: 22px; height: 22px; }
+.upgrade-name {
+  font-family: var(--font-display-jp);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  color: var(--bone);
+}
+.upgrade-desc { font-size: 11.5px; color: var(--bone-dim); line-height: 1.5; min-height: 2.8em; }
+.upgrade-pips { display: flex; gap: 5px; }
+.upgrade-pips i {
+  width: 13px; height: 6px; border-radius: 2px;
+  background: rgba(232, 220, 195, 0.14);
+}
+.upgrade-pips i.on {
+  background: var(--accent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.upgrade-step { font-family: var(--font-mono); font-size: 11px; color: var(--bone-dim); }
+.btn.buy {
+  margin-top: 2px;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-indent: 0.12em;
+  padding: 9px 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.btn.buy:disabled { opacity: 0.42; cursor: not-allowed; filter: grayscale(0.4); }
+.btn.buy:disabled:hover { transform: none; box-shadow: none; filter: grayscale(0.4); }
+.btn.buy .cost {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-family: var(--font-mono);
+  color: var(--gold);
+}
+.cost-ico { width: 13px; height: 13px; color: var(--gold); }
+
+/* 装い(スキン)グリッド */
+.skin-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+@media (max-width: 560px) { .skin-grid { grid-template-columns: repeat(2, 1fr); } }
+.skin {
+  --accent: var(--gold);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 14px 10px;
+  border-radius: 12px;
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-edge);
+  cursor: pointer;
+  text-align: center;
+  transition: transform 0.12s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.skin:hover:not(:disabled) { transform: translateY(-3px); border-color: color-mix(in srgb, var(--accent) 50%, var(--glass-edge)); }
+.skin.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 0 22px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.skin.locked { cursor: not-allowed; }
+.skin.locked .skin-portrait img { filter: grayscale(1) brightness(0.5); }
+.skin-portrait {
+  position: relative;
+  display: inline-flex;
+  width: 56px; height: 56px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--accent) 26%, transparent), transparent 70%);
+}
+.skin-portrait img { image-rendering: auto; }
+.skin-lock {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--bone-dim);
+}
+.skin-lock svg { width: 20px; height: 20px; }
+.skin-name {
+  font-family: var(--font-display-jp);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  color: var(--bone);
+}
+.skin-foot { font-size: 10.5px; color: var(--bone-dim); line-height: 1.45; min-height: 2.9em; }
+.skin.selected .skin-foot { color: var(--accent); }
+
+/* タイトルの祭壇ボタンのタグ・リザルトの魂 */
+.btn-tag {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--gold);
+  background: rgba(217, 164, 65, 0.12);
+  border: 1px solid rgba(217, 164, 65, 0.3);
+}
+.souls-earned {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--bone-dim);
+}
+.souls-earned b { font-family: var(--font-mono); font-size: 17px; color: var(--gold); }
+
+/* ============================================================
+   ホームの飾り棚(遺物のディオラマ)
+   ============================================================ */
+.diorama {
+  width: min(440px, 88vw);
+  margin: 18px auto 0;
+  text-align: center;
+}
+.diorama-head {
+  font-family: var(--font-display-jp);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.26em;
+  text-indent: 0.26em;
+  color: var(--gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 7px;
+}
+.diorama-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0;
+  color: var(--bone-dim);
+}
+.diorama-shelf {
+  position: relative;
+  height: 132px;
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(20, 14, 32, 0.5), rgba(12, 8, 20, 0.66)),
+    radial-gradient(120% 80% at 50% 0%, rgba(217, 164, 65, 0.06), transparent 70%);
+  border: 1px solid var(--glass-edge);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), inset 0 -18px 30px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  touch-action: none;
+}
+.curio-item {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--accent);
+  background: radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--accent) 30%, transparent), rgba(10, 6, 18, 0.5) 72%);
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--glass-edge));
+  box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 30%, transparent), 0 4px 10px rgba(0, 0, 0, 0.5);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: box-shadow 0.15s ease, transform 0.05s ease;
+}
+.curio-item svg { width: 22px; height: 22px; filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 60%, transparent)); }
+.curio-item:hover { box-shadow: 0 0 22px color-mix(in srgb, var(--accent) 45%, transparent), 0 4px 12px rgba(0, 0, 0, 0.55); }
+.curio-item.dragging {
+  cursor: grabbing;
+  transform: translate(-50%, -50%) scale(1.12);
+  box-shadow: 0 0 30px color-mix(in srgb, var(--accent) 60%, transparent), 0 8px 18px rgba(0, 0, 0, 0.6);
+  z-index: 2;
+}
+.diorama-hint {
+  margin-top: 7px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: rgba(232, 220, 195, 0.45);
+}
