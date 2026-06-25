@@ -136,8 +136,8 @@ export function sustainableDepth(stats: HeroStats): number {
   let best = 1;
   for (let d = 1; d <= 500; d++) {
     const clearTime = (waveCount(d) * enemyHpAt(d)) / Math.max(1, stats.dps);
-    const attackers = Math.min(waveCount(d), 2); // 同時に殴ってくるのは前列のみ
-    const dmg = enemyAtkAt(d) * (clearTime / ENEMY_MELEE_CD) * attackers;
+    // 敵は縦列に並び、先頭の一体だけが交戦して攻撃する(ライブ挙動と一致)。
+    const dmg = enemyAtkAt(d) * (clearTime / ENEMY_MELEE_CD);
     const regen = stats.maxHp * 0.04 * clearTime; // 戦闘中の微回復
     if (stats.maxHp + regen > dmg * 1.05) best = d;
     else break;

@@ -32,12 +32,17 @@ interface Props {
 
 const VW = 560; // 仮想座標幅(CSS 側で 100% に伸縮)
 const HERO_X = 92; // ヒーローの定位置(仮想座標)
-const MELEE_X = HERO_X + 30; // 敵がここまで来たら接敵
+const FRONT_X = HERO_X + 46; // 先頭の敵が止まる位置(交戦距離)
+const FOE_SPACING = 38; // 後続の敵はこの間隔で縦列に並ぶ(重なり防止)
+const BOLT_TIME = 0.14; // 魔弾がヒーローから敵へ届くまでの時間
 
 // ---- ウェーブのテンポ(ゆったりした波で、湧きが速すぎないように) ----
 const REST_SEC = 3.4; // ウェーブ間の小休止(明確な波の切れ目・回復の間)
 const WAVE_GAP = 1.0; // ウェーブ内の1体ずつの湧き間隔
 const MAX_ON_SCREEN = 3; // 同時に画面へ出す敵数の上限
+
+// 攻撃は本編の主人公に倣い「魔法(魔弾)」。色は魔弾の書の紫。
+const MAGIC = "#b9a0ff";
 
 // 深度が上がるほど手強い種が混じる
 const FOES: EnemyKind[] = ["bat", "zombie", "skeleton", "wraith", "warlock", "brute"];
@@ -45,7 +50,8 @@ const FOES: EnemyKind[] = ["bat", "zombie", "skeleton", "wraith", "warlock", "br
 type Phase = "rest" | "spawning" | "fighting" | "defeat";
 interface Foe { id: number; kind: EnemyKind; x: number; hp: number; maxHp: number; atkCd: number; dying: number; hitFlash: number; }
 interface Pop { id: number; x: number; y: number; text: string; life: number; kind: "kill" | "crit" | "reset" | "hurt" | "wave"; }
-interface Strike { id: number; x: number; life: number; crit: boolean; } // ヒーローの斬撃の着弾エフェクト
+interface Strike { id: number; x: number; life: number; crit: boolean; } // 魔弾の着弾(炸裂)エフェクト
+interface Bolt { id: number; fromX: number; toX: number; life: number; crit: boolean; } // ヒーローが放つ魔弾
 
 export default function TaskbarHero({ profile, onHeroSync }: Props) {
   const heroImg = skinPortrait(profile.selectedSkin);
@@ -63,7 +69,8 @@ export default function TaskbarHero({ profile, onHeroSync }: Props) {
   const foesRef = useRef<Foe[]>([]);
   const popsRef = useRef<Pop[]>([]);
   const strikesRef = useRef<Strike[]>([]);
-  const swingRef = useRef(0); // 武器を振るモーション(1→0 に減衰)
+  const boltsRef = useRef<Bolt[]>([]); // 飛翔中の魔弾
+  const castRef = useRef(0); // 詠唱の閃光(1→0 に減衰)
   const queueRef = useRef(0); // このウェーブで残り湧かせる数
   const spawnTimerRef = useRef(0);
   const restTimerRef = useRef(1.0);
@@ -111,7 +118,7 @@ export default function TaskbarHero({ profile, onHeroSync }: Props) {
       const foes = foesRef.current;
       const pops = popsRef.current;
       lungeRef.current = Math.max(0, lungeRef.current - dt * 4);
-      swingRef.current = Math.max(0, swingRef.current - dt * 7); // 斬撃モーションの減衰(速い)
+      castRef.current = Math.max(0, castRef.current - dt * 6); // 詠唱閃光の減衰
       heroFlashRef.current = Math.max(0, heroFlashRef.current - dt * 5);
 
       if (phaseRef.current === "rest") {
@@ -148,15 +155,17 @@ export default function TaskbarHero({ profile, onHeroSync }: Props) {
           spawnTimerRef.current = WAVE_GAP; // ウェーブ内の湧き間隔(ゆったり)
         }
 
-        // 敵の前進・接敵・攻撃(落ち着いた歩み)
+        // 敵の前進(縦列に整列して重ならない)・先頭だけが交戦して攻撃する
         const enemySpd = Math.min(118, 56 + live.depth * 2);
-        for (const f of foes) {
-          if (f.dying > 0) { f.dying -= dt; continue; }
+        const queue = foes.filter((f) => f.dying === 0).sort((a, b) => a.x - b.x); // 先頭=自機に近い
+        for (let i = 0; i < queue.length; i++) {
+          const f = queue[i];
           f.hitFlash = Math.max(0, f.hitFlash - dt);
-          if (f.x > MELEE_X) {
-            f.x -= enemySpd * dt;
-          } else {
-            f.x = MELEE_X;
+          const stopX = FRONT_X + i * FOE_SPACING; // 並ぶ位置(重なり防止)
+          if (f.x > stopX) {
+            f.x = Math.max(stopX, f.x - enemySpd * dt);
+          } else if (i === 0) {
+            // 先頭の一体だけが自機を攻撃する
             f.atkCd -= dt;
             if (f.atkCd <= 0) {
               f.atkCd = ENEMY_MELEE_CD;
@@ -173,14 +182,15 @@ export default function TaskbarHero({ profile, onHeroSync }: Props) {
         if (heroAtkCdRef.current <= 0 && alive.length > 0) {
           heroAtkCdRef.current = 1 / stats.atkSpeed;
           lungeRef.current = 1;
-          swingRef.current = 1; // 武器を振るモーション
+          castRef.current = 1; // 詠唱の閃光
           const crit = Math.random() < 0.16;
           const dmg = stats.atk * (crit ? 1.8 : 1);
           const target = alive[0];
           target.hp -= dmg;
-          target.hitFlash = 0.16; // 斬られた敵が白く光る
+          target.hitFlash = 0.16; // 被弾で白く光る
           target.x = Math.min(VW, target.x + (crit ? 9 : 5)); // のけぞり(ノックバック)
-          strikesRef.current.push({ id: idRef.current++, x: target.x, life: 0.26, crit }); // 着弾の斬閃
+          // ヒーローから標的へ魔弾を放つ(着弾の炸裂は弾の寿命切れで出す)
+          boltsRef.current.push({ id: idRef.current++, fromX: HERO_X + 12, toX: target.x, life: BOLT_TIME, crit });
           if (target.hp <= 0) {
             target.dying = 0.32;
             live.kills += 1;
@@ -209,7 +219,14 @@ export default function TaskbarHero({ profile, onHeroSync }: Props) {
         }
       }
 
-      // ポップ・斬閃の寿命
+      // 魔弾の飛翔: 寿命が尽きたら着弾の炸裂を生む
+      for (const b of boltsRef.current) {
+        b.life -= dt;
+        if (b.life <= 0) strikesRef.current.push({ id: idRef.current++, x: b.toX, life: 0.28, crit: b.crit });
+      }
+      boltsRef.current = boltsRef.current.filter((b) => b.life > 0);
+
+      // ポップ・炸裂の寿命
       for (const p of pops) { p.life -= dt; p.y += dt * 16; }
       popsRef.current = pops.filter((p) => p.life > 0);
       for (const s of strikesRef.current) s.life -= dt;
@@ -231,7 +248,8 @@ export default function TaskbarHero({ profile, onHeroSync }: Props) {
   const foes = foesRef.current;
   const pops = popsRef.current;
   const strikes = strikesRef.current;
-  const swing = swingRef.current;
+  const bolts = boltsRef.current;
+  const cast = castRef.current;
 
   return (
     <div className="taskbar-hero" aria-hidden="true">
@@ -246,12 +264,18 @@ export default function TaskbarHero({ profile, onHeroSync }: Props) {
             <img className={`tbh-foe${f.hitFlash > 0 ? " hit" : ""}`} src={enemyPortrait(f.kind)} alt="" style={{ transform: `scale(${f.dying > 0 ? 0.7 + f.dying : 1})` }} />
           </span>
         ))}
-        {/* 斬撃の着弾(斬閃) */}
+        {/* 飛翔中の魔弾(ヒーロー→敵) */}
+        {bolts.map((b) => {
+          const prog = 1 - b.life / BOLT_TIME;
+          const bx = b.fromX + (b.toX - b.fromX) * prog;
+          return <span key={b.id} className={`tbh-bolt${b.crit ? " crit" : ""}`} style={{ left: `${(bx / VW) * 100}%` }} />;
+        })}
+        {/* 魔弾の着弾(炸裂) */}
         {strikes.map((s) => (
-          <span key={s.id} className={`tbh-strike${s.crit ? " crit" : ""}`} style={{ left: `${(s.x / VW) * 100}%`, opacity: Math.min(1, s.life / 0.26), transform: `translate(-50%,-50%) scale(${0.7 + (1 - s.life / 0.26) * 0.9})` }}>
-            <svg viewBox="0 0 30 30" width="30" height="30" aria-hidden="true">
-              <path d="M4 9 L25 21 M24 8 L7 22" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" fill="none" />
-              <circle cx="15" cy="15" r="2" fill="currentColor" />
+          <span key={s.id} className={`tbh-strike${s.crit ? " crit" : ""}`} style={{ left: `${(s.x / VW) * 100}%`, opacity: Math.min(1, s.life / 0.28), transform: `translate(-50%,-50%) scale(${0.6 + (1 - s.life / 0.28) * 1.1})` }}>
+            <svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">
+              <circle cx="16" cy="16" r="5" fill="currentColor" opacity="0.9" />
+              <path d="M16 1 V9 M16 23 V31 M1 16 H9 M23 16 H31 M5 5 L10 10 M22 22 L27 27 M27 5 L22 10 M10 22 L5 27" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </span>
         ))}
@@ -264,13 +288,9 @@ export default function TaskbarHero({ profile, onHeroSync }: Props) {
             alt=""
             style={{ transform: `translateX(${lungeRef.current * 9}px)` }}
           />
-          {/* 武器を振る斬撃モーション(前方へ薙ぐ弧) */}
-          {swing > 0.05 && (
-            <span className="tbh-swing" style={{ opacity: swing, transform: `rotate(${-40 + (1 - swing) * 70}deg) scale(${0.8 + swing * 0.4})` }}>
-              <svg viewBox="0 0 44 44" width="44" height="44" aria-hidden="true">
-                <path d="M6 34 Q34 30 38 7" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" fill="none" />
-              </svg>
-            </span>
+          {/* 詠唱の閃光(魔法を放つ瞬間、掌に灯る) */}
+          {cast > 0.05 && (
+            <span className="tbh-cast" style={{ opacity: cast, transform: `scale(${0.7 + cast * 0.7})` }} />
           )}
         </span>
         {/* ポップ */}
