@@ -77,6 +77,11 @@ import { NO_META_BONUS } from "./types";
 const TAU = Math.PI * 2;
 const MAX_ENEMIES = 300;
 const RALLY_RADIUS = 340; // 灰燼の使者が雑魚を鼓舞(加速)する半径
+const AXE_GRAVITY = 980; // 斧の落下加速度。fireAxe の弧の頂点計算と updateProjectiles の落下で共有(必ず一致)
+
+// 被弾フィードバック(プレイヤーが接触/呪弾でダメージを受けたときの共通値)
+const PLAYER_HIT_IFRAME = 0.6; // 被弾後の無敵時間(連続ヒットで一気に溶けるのを防ぐ)
+const PLAYER_HIT_FLASH = 0.3; // 画面の緋い被弾フラッシュの強さ
 
 // ローリング回避(スタミナ消費)
 const STAMINA_MAX = 100;
@@ -448,9 +453,18 @@ export class Engine {
     return c;
   }
 
+  /**
+   * プレイヤーの総合性能(Derived)を毎フレーム導出する。発射側はこの結果だけを読み、
+   * 装備構成を意識しない。3 段の積み上げ:
+   *   ①基礎値(速度175 / 最大HP100 など) × パッシブのレベル補正(俊足+8%/Lv 等)
+   *   ②祭壇の恒久強化(metaBonus。最大HP倍率・攻撃倍率…)を乗算/加算
+   *   ③流派(紋章)セットボーナス(所持数→段位→貫通/間隔/範囲/再生など)を上乗せ
+   * 各係数は data.ts(PASSIVES の levelDesc)/altar.ts/schoolBonusText と対応する。
+   */
   private recomputeDerived(): void {
     const lv = (id: PassiveId) => this.passiveLv(id);
     const mb = this.metaBonus; // 祭壇の恒久強化(開始時ボーナス)
+    // ---- ①基礎値 × パッシブ + ②祭壇の恒久強化 ----
     const d: Derived = {
       speed: 175 * (1 + 0.08 * lv("boots")) * mb.speedMul,
       maxHp: Math.round(100 * (1 + 0.15 * lv("heart")) * mb.maxHpMul),
@@ -659,10 +673,9 @@ export class Engine {
   private fireAxe(amount: number, st: { damage: number; duration: number }, might: number, area: number): void {
     const p = this.world.player;
     // 画面内に収まる弧を描く: 頂点を画面上端のやや内側に置き、横移動も画面幅基準に抑える。
-    // (放物線の頂点高 = vy0^2 / 2g。重力は updateProjectiles の 980 と一致させる。)
-    const g = 980;
+    // (放物線の頂点高 = vy0^2 / 2g。重力 g は落下側 updateProjectiles と共有の AXE_GRAVITY。)
     const apexH = Math.max(200, Math.min(this.vh * 0.42, 430)); // 画面上端の手前まで
-    const vy0 = -Math.sqrt(2 * g * apexH);
+    const vy0 = -Math.sqrt(2 * AXE_GRAVITY * apexH);
     for (let i = 0; i < amount; i++) {
       const dir = p.dirX >= 0 ? 1 : -1;
       const spread = this.vw * (0.08 + Math.random() * 0.05); // 画面幅の 8〜13% 程度の横速度
@@ -761,7 +774,7 @@ export class Engine {
       if (pr.kind === "orb") continue; // 宝珠は maintainOrbs が管理
       pr.life -= dt;
       if (pr.kind === "axe") {
-        pr.vy += 980 * dt;
+        pr.vy += AXE_GRAVITY * dt; // 落下(fireAxe の頂点計算と同じ重力)
         pr.angle += pr.spin * dt;
       }
       pr.x += pr.vx * dt;
@@ -926,8 +939,8 @@ export class Engine {
       const rr = e.radius + 12;
       if (p.invuln <= 0 && (e.x - p.x) ** 2 + (e.y - p.y) ** 2 < rr * rr) {
         p.hp -= e.damage * (1 - this.metaBonus.armor); // 鉄壁の祈り(被ダメ軽減)
-        p.invuln = 0.6;
-        w.flash = 0.3;
+        p.invuln = PLAYER_HIT_IFRAME;
+        w.flash = PLAYER_HIT_FLASH;
         w.shake = Math.min(1, w.shake + 0.45);
         // 吸血卿の吸血: 打撃が通れば最大HPの一部を自己回復する
         if (e.kind === "boss" && e.bossType && BOSSES_BY_ID[e.bossType]?.ability === "swarm") {
@@ -1115,8 +1128,8 @@ export class Engine {
       const rr = s.radius + 12;
       if (p.invuln <= 0 && (s.x - p.x) ** 2 + (s.y - p.y) ** 2 < rr * rr) {
         p.hp -= s.damage * (1 - this.metaBonus.armor);
-        p.invuln = 0.6;
-        w.flash = 0.3;
+        p.invuln = PLAYER_HIT_IFRAME;
+        w.flash = PLAYER_HIT_FLASH;
         w.shake = Math.min(1, w.shake + 0.35);
         this.burst(s.x, s.y, 8, "#c08aff", 2.4);
         w.enemyShots.splice(i, 1);
@@ -1217,16 +1230,22 @@ export class Engine {
 
   // ---------- 経験石・回復 ----------
 
+  /**
+   * 経験石と道具(秘薬/磁石/遺物/戦利品)の更新。
+   * 経験石は回収範囲(magnet)に入ると自機へ吸い寄せられ、近いほど速く引かれる。
+   * 触れた経験石は取得して XP に、道具は種別ごとに即時処理する。
+   */
   private updateGems(dt: number): void {
     const w = this.world;
     const p = w.player;
-    const magnet = w.derived.magnet;
+    const magnet = w.derived.magnet; // 回収範囲(骸の磁鉄パッシブ等で拡大)
 
     for (let i = w.gems.length - 1; i >= 0; i--) {
       const g = w.gems[i];
       const dx = p.x - g.x;
       const dy = p.y - g.y;
       const dd = dx * dx + dy * dy;
+      // 回収範囲内なら自機方向へ加速(残り距離が近いほど強く引く)
       if (dd < magnet * magnet) {
         const d = Math.sqrt(dd) || 1;
         const pull = 420 + (magnet - d) * 4;
@@ -1235,9 +1254,9 @@ export class Engine {
       }
       g.x += g.vx * dt;
       g.y += g.vy * dt;
-      g.vx *= Math.pow(0.01, dt);
+      g.vx *= Math.pow(0.01, dt); // 範囲外では速やかに減速して漂う
       g.vy *= Math.pow(0.01, dt);
-      if (dd < 22 * 22) {
+      if (dd < 22 * 22) { // 触れた(22px 以内)→ 取得
         w.gems.splice(i, 1);
         this.gainXp(g.value);
       }
@@ -1282,13 +1301,18 @@ export class Engine {
     this.emit({ type: "curio", id });
   }
 
+  /**
+   * 経験値を加算し、必要量に達するごとにレベルアップする。
+   * 1 フレームで複数レベル上がることもあるため while で繰り上げ、上がった回数を
+   * levelPending に積む(update がポーズ無しの間に1枚ずつカード提示へ消化する)。
+   */
   private gainXp(v: number): void {
     const p = this.world.player;
     p.xp += v * this.metaBonus.xpMul; // 強欲の瞳(取得経験値増)
     while (p.xp >= p.xpNext) {
       p.xp -= p.xpNext;
       p.level++;
-      p.xpNext = xpNeeded(p.level);
+      p.xpNext = xpNeeded(p.level); // 次レベルの必要量(曲線は data.ts の xpNeeded)
       this.levelPending++;
     }
   }
