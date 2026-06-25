@@ -1358,6 +1358,17 @@ input[type="range"] {
   pointer-events: none;
 }
 .tbh-bolt.crit { background: radial-gradient(circle, #fff, #d7b8ff 55%, rgba(215, 184, 255, 0) 78%); box-shadow: 0 0 12px 3px rgba(215, 184, 255, 0.95), 16px 0 18px -4px rgba(215, 184, 255, 0.6); }
+/* 後列の敵が投げる飛び道具(敵→自機・緋い敵性弾。尾は右へ引く) */
+.tbh-foeshot {
+  position: absolute;
+  bottom: 30px;
+  width: 9px; height: 9px;
+  transform: translate(-50%, 50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffd2c0, #e0455e 55%, rgba(200, 50, 62, 0) 80%);
+  box-shadow: 0 0 7px 1px rgba(224, 69, 94, 0.8), -12px 0 14px -4px rgba(224, 69, 94, 0.5);
+  pointer-events: none;
+}
 /* 魔弾の着弾(炸裂) */
 .tbh-strike {
   position: absolute;

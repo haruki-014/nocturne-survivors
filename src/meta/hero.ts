@@ -130,10 +130,13 @@ export function heroStats(prev: Profile): HeroStats {
 //   深度 depth が上がるほど、敵は数(waveCount)・硬さ(enemyHpAt)・打撃(enemyAtkAt)が
 //   線形に増える。装備で攻撃/HP/手数が伸びれば、より深い波まで“勝ち切れる”ようになる、
 //   という単純で予測しやすいカーブにしてある(数値はここだけで調整できる)。
-export const ENEMY_MELEE_CD = 1.1; // 敵の打撃間隔(秒)
+export const ENEMY_MELEE_CD = 1.1; // 先頭の敵の打撃間隔(秒)
+export const FOE_THROW_CD = 1.9; // 後列の敵が投擲する間隔(秒)
+export const FOE_THROW_DMG_MUL = 0.5; // 投擲ダメージは近接の半分(遠隔ぶん控えめ)
+export const FOE_THROWERS_MAX = 2; // 同時に投げてくる後列の上限(画面内上限3体=先頭1+後列2)
 export const waveCount = (depth: number): number => Math.min(6, 3 + Math.floor(depth / 4)); // 1波の敵数(3→最大6)
 export const enemyHpAt = (depth: number): number => 14 + depth * 10; // 敵1体のHP
-export const enemyAtkAt = (depth: number): number => 2 + depth * 1.4; // 敵の1撃ダメージ
+export const enemyAtkAt = (depth: number): number => 2 + depth * 1.4; // 敵の1撃ダメージ(近接)
 export const xpPerKillAt = (depth: number): number => 4 + depth * 2; // 撃破1体あたりのXP
 
 /**
@@ -142,18 +145,22 @@ export const xpPerKillAt = (depth: number): number => 4 + depth * 2; // 撃破1�
  *
  * 考え方: 深度 d の波を「先頭から1体ずつ縦列で削る」と仮定すると、
  *   ・殲滅にかかる時間  clearTime = (敵数 × 敵HP) / 自機DPS
- *   ・その間に受ける総ダメ dmg   = 敵の打撃 × (clearTime / 打撃間隔)   ※殴るのは先頭の1体だけ
- *   ・その間の微回復       regen  = 最大HP × 0.04 × clearTime
- * 「最大HP + regen が dmg(+5%の余裕) を上回る」最も深い d を探す。
+ *   ・先頭の近接ダメ    melee = 敵の打撃 × (clearTime / 打撃間隔)        ※殴るのは先頭の1体
+ *   ・後列の投擲ダメ    throw = 敵の打撃 × 0.5 × (clearTime / 投擲間隔) × 投擲者数
+ *                       (投擲者は最大2、波の消耗で常時いるわけではないので 0.6 で割り引く)
+ *   ・その間の微回復     regen = 最大HP × 0.04 × clearTime
+ * 「最大HP + regen が (melee+throw)(+5%の余裕) を上回る」最も深い d を探す。
  * 浅い順に試して最初に破綻した手前を壁とする(単調なので break で十分)。
  */
 export function sustainableDepth(stats: HeroStats): number {
   let best = 1;
   for (let d = 1; d <= 500; d++) {
     const clearTime = (waveCount(d) * enemyHpAt(d)) / Math.max(1, stats.dps);
-    const dmg = enemyAtkAt(d) * (clearTime / ENEMY_MELEE_CD); // 先頭の一体だけが攻撃(ライブ挙動と一致)
+    const melee = enemyAtkAt(d) * (clearTime / ENEMY_MELEE_CD); // 先頭の近接(ライブ挙動と一致)
+    const throwers = Math.min(Math.max(0, waveCount(d) - 1), FOE_THROWERS_MAX);
+    const thrown = enemyAtkAt(d) * FOE_THROW_DMG_MUL * (clearTime / FOE_THROW_CD) * throwers * 0.6; // 後列の投擲
     const regen = stats.maxHp * 0.04 * clearTime;
-    if (stats.maxHp + regen > dmg * 1.05) best = d;
+    if (stats.maxHp + regen > (melee + thrown) * 1.05) best = d;
     else break;
   }
   return best;

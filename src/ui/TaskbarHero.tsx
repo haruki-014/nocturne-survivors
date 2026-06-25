@@ -81,6 +81,10 @@ export default function TaskbarHero({ profile, onHeroSync }: Props) {
           const bx = b.fromX + (b.toX - b.fromX) * (1 - b.life / BOLT_TIME);
           return <span key={b.id} className={`tbh-bolt${b.crit ? " crit" : ""}`} style={{ left: xpct(bx) }} />;
         })}
+        {/* 後列の敵が投げた飛び道具(敵→自機) */}
+        {sim.foeShots.map((s) => (
+          <span key={s.id} className="tbh-foeshot" style={{ left: xpct(s.x) }} />
+        ))}
         {/* 魔弾の着弾(炸裂) */}
         {sim.strikes.map((s) => (
           <span key={s.id} className={`tbh-strike${s.crit ? " crit" : ""}`} style={{ left: xpct(s.x), opacity: Math.min(1, s.life / 0.28), transform: `translate(-50%,-50%) scale(${0.6 + (1 - s.life / 0.28) * 1.1})` }}>

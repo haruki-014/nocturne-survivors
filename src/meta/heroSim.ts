@@ -24,6 +24,8 @@ import {
   ENEMY_MELEE_CD,
   enemyAtkAt,
   enemyHpAt,
+  FOE_THROW_CD,
+  FOE_THROW_DMG_MUL,
   heroStats,
   offlineProgress,
   waveCount,
@@ -51,6 +53,7 @@ const REGEN_REST = 0.6; // 小休止中の毎秒回復(最大HP比)
 const REGEN_FIGHT = 0.03; // 戦闘中の微回復(最大HP比/秒)
 const DEFEAT_DROP = 3; // 敗北時に下げる深度
 const STRIKE_LIFE = 0.28; // 着弾炸裂の寿命
+const FOE_SHOT_SPEED = 240; // 後列の敵が投げる飛び道具の速さ(自機へ向かう)
 
 // 深度が上がるほど手強い種が前列に混じる
 const FOES: EnemyKind[] = ["bat", "zombie", "skeleton", "wraith", "warlock", "brute"];
@@ -59,10 +62,11 @@ const enemyPool = (depth: number): EnemyKind[] =>
 
 // ---- 実行時エンティティ(描画側が読み取る) ----
 export type SimPhase = "rest" | "spawning" | "fighting" | "defeat";
-export interface SimFoe { id: number; kind: EnemyKind; x: number; hp: number; maxHp: number; atkCd: number; dying: number; hitFlash: number; }
+export interface SimFoe { id: number; kind: EnemyKind; x: number; hp: number; maxHp: number; atkCd: number; throwCd: number; dying: number; hitFlash: number; }
 export interface SimPop { id: number; x: number; y: number; text: string; life: number; kind: "kill" | "crit" | "reset" | "hurt" | "wave"; }
 export interface SimStrike { id: number; x: number; life: number; crit: boolean; } // 魔弾の着弾(炸裂)
-export interface SimBolt { id: number; fromX: number; toX: number; life: number; crit: boolean; } // 飛翔中の魔弾
+export interface SimBolt { id: number; fromX: number; toX: number; life: number; crit: boolean; } // ヒーローの魔弾(右向き)
+export interface SimFoeShot { id: number; x: number; dmg: number; } // 後列の敵が投げる飛び道具(自機=左へ)
 
 /** ミニゲーム 1 ラン分の可変状態。すべて stepSim が破壊的に進める。 */
 export interface HeroSim {
@@ -72,7 +76,8 @@ export interface HeroSim {
   foes: SimFoe[];
   pops: SimPop[];
   strikes: SimStrike[];
-  bolts: SimBolt[];
+  bolts: SimBolt[]; // ヒーローの魔弾
+  foeShots: SimFoeShot[]; // 後列の敵が投げた飛び道具
   // ヒーローの演出タイマー(1→0 に減衰)
   cast: number; // 詠唱の閃光
   lunge: number; // 踏み込み
@@ -99,7 +104,7 @@ export function createSim(profile: Profile, now: number): HeroSim {
   return {
     live: { kills: seed.kills, xp: seed.xp, depth: seed.depth },
     phase: "rest", hp: maxHp,
-    foes: [], pops: [], strikes: [], bolts: [],
+    foes: [], pops: [], strikes: [], bolts: [], foeShots: [],
     cast: 0, lunge: 0, heroFlash: 0, heroAlpha: 1,
     queue: 0, spawnTimer: 0, restTimer: 1.0, defeatTimer: 0, heroAtkCd: 0,
     _id: 1,
@@ -138,6 +143,7 @@ function beginWave(sim: HeroSim): void {
   sim.queue = waveCount(sim.live.depth);
   sim.spawnTimer = 0.4; // 波の頭に小さな“間”
   sim.foes.length = 0;
+  sim.foeShots.length = 0; // 前の波の飛び道具は持ち越さない
   sim.pops.push({ id: sim._id++, x: VW * 0.5, y: 16, text: `第 ${sim.live.depth} 波`, life: 1.6, kind: "wave" });
 }
 
@@ -150,6 +156,7 @@ function stepDefeat(sim: HeroSim, stats: HeroStats, dt: number): void {
     sim.hp = stats.maxHp;
     sim.heroAlpha = 1;
     sim.foes.length = 0;
+    sim.foeShots.length = 0;
     sim.phase = "rest";
     sim.restTimer = 1.0;
   }
@@ -166,7 +173,8 @@ function stepCombat(sim: HeroSim, stats: HeroStats, dt: number): void {
     sim.spawnTimer = WAVE_GAP;
   }
 
-  advanceFoes(sim, dt); // 縦列に整列して前進・先頭だけが攻撃
+  advanceFoes(sim, dt); // 縦列に整列して前進・先頭は近接/後列は投擲
+  advanceFoeShots(sim, dt); // 投げられた飛び道具を進め、到達分を被弾(同フレームの敗北判定に含める)
   heroAttack(sim, stats, dt); // 最前の敵へ魔弾
 
   // 微回復
@@ -184,6 +192,7 @@ function stepCombat(sim: HeroSim, stats: HeroStats, dt: number): void {
     // 波を殲滅 → 小休止して次の深度へ
     sim.live.depth += 1;
     sim.foes.length = 0;
+    sim.foeShots.length = 0;
     sim.phase = "rest";
     sim.restTimer = REST_SEC;
   }
@@ -194,10 +203,16 @@ function spawnFoe(sim: HeroSim): void {
   const pool = enemyPool(sim.live.depth);
   const kind = pool[Math.floor(Math.random() * pool.length)];
   const hp = enemyHpAt(sim.live.depth);
-  sim.foes.push({ id: sim._id++, kind, x: VW + 24 + Math.random() * 40, hp, maxHp: hp, atkCd: 0.4 + Math.random() * 0.5, dying: 0, hitFlash: 0 });
+  // throwCd は初手をばらけさせるため乱数で始める(湧いた直後に一斉投擲しない)
+  sim.foes.push({ id: sim._id++, kind, x: VW + 24 + Math.random() * 40, hp, maxHp: hp, atkCd: 0.4 + Math.random() * 0.5, throwCd: 0.4 + Math.random() * 0.8, dying: 0, hitFlash: 0 });
 }
 
-/** 敵を縦列(先頭=自機側)に整列させて前進させ、先頭の一体だけが自機を攻撃する。 */
+/**
+ * 敵を縦列(先頭=自機側)に整列させて前進させる。停止位置に着いた敵は:
+ *   ・先頭(i===0)        … 接敵して近接攻撃(打撃間隔ごとに HP を削る)
+ *   ・後列(i>=1)         … 待ちながら自機へ飛び道具を投げる(近接の半分の威力)
+ * これで「後ろで待つだけ」の退屈さを無くし、列が深いほど圧が増す。
+ */
 function advanceFoes(sim: HeroSim, dt: number): void {
   const depth = sim.live.depth;
   const enemySpd = Math.min(ENEMY_SPD_MAX, 56 + depth * 2);
@@ -206,19 +221,41 @@ function advanceFoes(sim: HeroSim, dt: number): void {
     const f = queue[i];
     f.hitFlash = Math.max(0, f.hitFlash - dt);
     const stopX = FRONT_X + i * FOE_SPACING; // 並ぶ位置(重なり防止)
-    if (f.x > stopX) {
-      f.x = Math.max(stopX, f.x - enemySpd * dt);
-    } else if (i === 0) {
-      // 先頭の一体だけが交戦して攻撃する
-      f.atkCd -= dt;
-      if (f.atkCd <= 0) {
-        f.atkCd = ENEMY_MELEE_CD;
-        sim.hp -= enemyAtkAt(depth);
-        sim.heroFlash = 1;
-        sim.pops.push({ id: sim._id++, x: HERO_X, y: 4 + Math.random() * 4, text: `-${Math.round(enemyAtkAt(depth))}`, life: 0.7, kind: "hurt" });
+    if (f.x > stopX) f.x = Math.max(stopX, f.x - enemySpd * dt); // 列の位置まで前進
+    // 攻撃は移動と独立。先頭は交戦距離で近接、後列は画面内なら投擲する。
+    if (i === 0) {
+      if (f.x <= stopX + 2) {
+        f.atkCd -= dt;
+        if (f.atkCd <= 0) {
+          f.atkCd = ENEMY_MELEE_CD;
+          hurtHero(sim, enemyAtkAt(depth));
+        }
+      }
+    } else if (f.x < VW * 0.92) {
+      // 後列は近づきながら自機へ飛び道具を投げる(近接より控えめな威力)
+      f.throwCd -= dt;
+      if (f.throwCd <= 0) {
+        f.throwCd = FOE_THROW_CD * (0.85 + Math.random() * 0.3);
+        sim.foeShots.push({ id: sim._id++, x: f.x, dmg: enemyAtkAt(depth) * FOE_THROW_DMG_MUL });
       }
     }
   }
+}
+
+/** 自機が被弾する共通処理(HP 減・被弾フラッシュ・ダメージ表示)。 */
+function hurtHero(sim: HeroSim, dmg: number): void {
+  sim.hp -= dmg;
+  sim.heroFlash = 1;
+  sim.pops.push({ id: sim._id++, x: HERO_X, y: 4 + Math.random() * 4, text: `-${Math.round(dmg)}`, life: 0.7, kind: "hurt" });
+}
+
+/** 後列が投げた飛び道具を自機へ進め、到達したら被弾させる。 */
+function advanceFoeShots(sim: HeroSim, dt: number): void {
+  for (const s of sim.foeShots) {
+    s.x -= FOE_SHOT_SPEED * dt;
+    if (s.x <= HERO_X + 8) hurtHero(sim, s.dmg);
+  }
+  sim.foeShots = sim.foeShots.filter((s) => s.x > HERO_X + 8);
 }
 
 /** ヒーローの攻撃: クールダウンが空いたら最前の敵へ魔弾を放つ(着弾炸裂は弾の寿命で出す)。 */
