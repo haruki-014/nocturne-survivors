@@ -108,23 +108,30 @@ export class Canvas2DRenderer implements Renderer {
   }
 }
 
+/**
+ * スプライトのオフスクリーン・キャッシュ。key ごとに一度だけ size×size の canvas へ
+ * draw() で焼き、以後は使い回す(毎フレームの再描画を避け、数百体でも軽い)。
+ * draw には原点を中心に移した ctx と一辺 size が渡される。
+ */
 function makeSprite(
   key: string,
   size: number,
   draw: (ctx: CanvasRenderingContext2D, s: number) => void,
 ): HTMLCanvasElement {
   const cached = spriteCache.get(key);
-  if (cached) return cached;
+  if (cached) return cached; // 同じ key は再生成しない
   const c = document.createElement("canvas");
   c.width = size;
   c.height = size;
   const ctx = c.getContext("2d")!;
-  ctx.translate(size / 2, size / 2);
+  ctx.translate(size / 2, size / 2); // 以降の描画は中心原点
   draw(ctx, size);
   spriteCache.set(key, c);
   return c;
 }
 
+// プレイヤー(灯を掲げる者)のスプライト。装い(SkinDef)の配色で外套・縁取り・
+// 襟巻・面立ち・燈火を描き分ける。スキンごとにキャッシュされる。
 function playerSprite(skin: SkinDef): HTMLCanvasElement {
   return makeSprite(`player:${skin.id}`, 60, (ctx) => {
     // 外套のシルエット
@@ -1109,6 +1116,14 @@ const WISPS = Array.from({ length: 7 }, (_, i) => ({
 
 // ---------- メイン描画 ----------
 
+/**
+ * World を読んで 1 フレームを Canvas2D に描く中心関数(状態は読むだけ・変更しない)。
+ * カメラは自機中心(camX/camY)。描く順序は奥→手前:
+ *   背景/血月の帯 → 地形装飾・ランドマーク → 聖域境界 → 薫香オーラ → 経験石・道具 →
+ *   ボス能力オーラ → 敵 → 自機 → 投射物 → 敵弾 → 雷 → 粒子 → ダメージ数字 →
+ *   〔光と闇〕ランタン光/血月/微塵/被弾フラッシュ → 画面外マーカー → ミニマップ → 構え表示。
+ * 重い図形は makeSprite でキャッシュ済みのものを drawImage する。
+ */
 export function renderWorld(
   ctx: CanvasRenderingContext2D,
   vw: number,
