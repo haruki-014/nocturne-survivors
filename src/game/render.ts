@@ -1270,6 +1270,159 @@ function drawArena(v: View): void {
 }
 
 /**
+ * 雰囲気レイヤー(光と闇)。ここから上は「世界」、下は「夜気」。
+ * 自機のランタンを光源とする闇(夜啼きで visionScale<1 なら灯が狭まる)・芯の暖光・血月・
+ * 舞う微塵・四隅の沈み・瘴気デバフの緑・被弾の緋いフラッシュを重ねて没入を作る。
+ */
+function drawAtmosphere(v: View): void {
+  const { ctx, vw, vh, world, camX, camY, wx, wy } = v;
+  const p = world.player;
+  // --- プレイヤーのランタンを光源とする闇 ---
+  //   visionScale<1 のとき(夜啼く女王の夜啼き)は灯が狭まり、周縁がより深い闇に沈む。
+  const lx = wx(p.x);
+  const ly = wy(p.y);
+  const flicker = 1 + Math.sin(world.t * 9) * 0.015 + Math.sin(world.t * 23) * 0.008;
+  const vis = world.visionScale ?? 1;
+  const lightR = Math.min(vw, vh) * 0.66 * flicker * vis;
+  const constrict = 1 - vis; // 0=通常 〜 0.42=最大制限
+  const dark = ctx.createRadialGradient(lx, ly, lightR * 0.34, lx, ly, lightR);
+  dark.addColorStop(0, "rgba(4,2,9,0)");
+  dark.addColorStop(0.7, `rgba(4,2,9,${0.32 + constrict * 0.5})`);
+  dark.addColorStop(1, `rgba(2,1,5,${0.62 + constrict * 0.85})`);
+  ctx.fillStyle = dark;
+  ctx.fillRect(0, 0, vw, vh);
+
+  // 温かいランタンの芯光(加算)
+  ctx.globalCompositeOperation = "lighter";
+  const warm = ctx.createRadialGradient(lx, ly, 2, lx, ly, 140 * flicker);
+  warm.addColorStop(0, "rgba(255,214,140,0.16)");
+  warm.addColorStop(0.5, "rgba(217,164,65,0.06)");
+  warm.addColorStop(1, "rgba(217,164,65,0)");
+  ctx.fillStyle = warm;
+  ctx.beginPath();
+  ctx.arc(lx, ly, 140 * flicker, 0, TAU);
+  ctx.fill();
+  ctx.globalCompositeOperation = "source-over";
+
+  // --- 血月(天体・固定位置・コロナ付き) ---
+  {
+    const mx = vw - 124;
+    const my = 112;
+    const pulse = 1 + Math.sin(world.t * 0.7) * 0.04;
+    // コロナ
+    ctx.globalCompositeOperation = "lighter";
+    const corona = ctx.createRadialGradient(mx, my, 8, mx, my, 240 * pulse);
+    corona.addColorStop(0, "rgba(200,50,62,0.20)");
+    corona.addColorStop(0.35, "rgba(170,40,55,0.07)");
+    corona.addColorStop(1, "rgba(170,40,55,0)");
+    ctx.fillStyle = corona;
+    ctx.beginPath();
+    ctx.arc(mx, my, 240 * pulse, 0, TAU);
+    ctx.fill();
+    ctx.globalCompositeOperation = "source-over";
+    // 月本体
+    const disc = ctx.createRadialGradient(mx - 10, my - 10, 4, mx, my, 42);
+    disc.addColorStop(0, "#e87681");
+    disc.addColorStop(0.6, "#c8323e");
+    disc.addColorStop(1, "#8f2230");
+    ctx.fillStyle = disc;
+    ctx.beginPath();
+    ctx.arc(mx, my, 40, 0, TAU);
+    ctx.fill();
+    // 海(模様)
+    ctx.fillStyle = "rgba(90,20,30,0.4)";
+    ctx.beginPath();
+    ctx.arc(mx - 12, my - 6, 8, 0, TAU);
+    ctx.arc(mx + 10, my + 9, 11, 0, TAU);
+    ctx.arc(mx + 4, my - 14, 5, 0, TAU);
+    ctx.fill();
+    // 欠け(三日月の影)
+    ctx.fillStyle = "#070410";
+    ctx.beginPath();
+    ctx.arc(mx - 17, my - 13, 36, 0, TAU);
+    ctx.fill();
+  }
+
+  // --- 周縁の微塵(ランタンに舞う塵・加算) ---
+  ctx.globalCompositeOperation = "lighter";
+  for (let i = 0; i < 40; i++) {
+    const seedx = hash2(i + 1, 5);
+    const seedy = hash2(7, i + 3);
+    const speed = 6 + seedx * 10;
+    const dx = ((seedx * vw - camX * 0.2) % vw + vw) % vw;
+    const dy = (((seedy * vh - world.t * speed) % vh) + vh) % vh;
+    const tw = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(world.t * 2 + i));
+    // 光源に近いほど明るい
+    const dist = Math.hypot(dx - lx, dy - ly);
+    const near = Math.max(0, 1 - dist / (lightR * 0.9));
+    const a = 0.05 + 0.18 * tw * near;
+    ctx.fillStyle = i % 3 === 0 ? `rgba(217,164,65,${a})` : `rgba(232,220,195,${a})`;
+    ctx.beginPath();
+    ctx.arc(dx, dy, 0.7 + tw * 1.1, 0, TAU);
+    ctx.fill();
+  }
+  ctx.globalCompositeOperation = "source-over";
+
+  // --- 縁の重さ(画面四隅をわずかに沈める) ---
+  const edge = ctx.createRadialGradient(vw / 2, vh / 2, Math.min(vw, vh) * 0.55, vw / 2, vh / 2, Math.max(vw, vh) * 0.78);
+  edge.addColorStop(0, "rgba(7,4,16,0)");
+  edge.addColorStop(1, "rgba(3,1,7,0.5)");
+  ctx.fillStyle = edge;
+  ctx.fillRect(0, 0, vw, vh);
+
+  // --- 瘴気の鈍足デバフ(画面四隅に毒の緑が滲む) ---
+  if ((world.playerSlow ?? 0) > 0) {
+    const a = Math.min(1, world.playerSlow / 0.5);
+    const poison = ctx.createRadialGradient(vw / 2, vh / 2, Math.min(vw, vh) * 0.4, vw / 2, vh / 2, Math.max(vw, vh) * 0.72);
+    poison.addColorStop(0, "rgba(90,140,50,0)");
+    poison.addColorStop(1, `rgba(110,170,60,${a * 0.32})`);
+    ctx.fillStyle = poison;
+    ctx.fillRect(0, 0, vw, vh);
+  }
+
+  // --- 被弾フラッシュ(緋い明滅・最前面) ---
+  if (world.flash > 0) {
+    ctx.globalCompositeOperation = "lighter";
+    const f = ctx.createRadialGradient(lx, ly, 40, lx, ly, Math.max(vw, vh) * 0.7);
+    f.addColorStop(0, `rgba(200,50,62,${world.flash * 0.1})`);
+    f.addColorStop(1, `rgba(255,60,75,${world.flash * 0.5})`);
+    ctx.fillStyle = f;
+    ctx.fillRect(0, 0, vw, vh);
+    ctx.globalCompositeOperation = "source-over";
+  }
+}
+
+/** 構えの間: 再開前のカウントダウン(暗幕＋細るリング＋「構えよ」)。 */
+function drawGrace(v: View): void {
+  const { ctx, vw, vh, world } = v;
+  if (!(world.grace > 0 && world.graceMax > 0)) return;
+  ctx.fillStyle = "rgba(6,3,12,0.45)";
+  ctx.fillRect(0, 0, vw, vh);
+  const cxp = vw / 2;
+  const cyp = vh / 2;
+  const n = Math.ceil(world.grace);
+  const frac = world.grace / world.graceMax;
+  // 細るリング
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = "rgba(232,220,195,0.18)";
+  ctx.beginPath();
+  ctx.arc(cxp, cyp - 6, 54, 0, TAU);
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(200,50,62,0.9)";
+  ctx.beginPath();
+  ctx.arc(cxp, cyp - 6, 54, -Math.PI / 2, -Math.PI / 2 + TAU * frac);
+  ctx.stroke();
+  ctx.fillStyle = "#e8dcc3";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = '600 52px "IBM Plex Mono", monospace';
+  ctx.fillText(String(n), cxp, cyp - 4);
+  ctx.font = '600 15px "Shippori Mincho", serif';
+  ctx.fillStyle = "rgba(232,220,195,0.7)";
+  ctx.fillText("構 え よ", cxp, cyp + 54);
+}
+
+/**
  * World を読んで 1 フレームを Canvas2D に描く中心関数(状態は読むだけ・変更しない)。
  * カメラは自機中心(camX/camY)。描く順序は奥→手前:
  *   背景/血月の帯 → 地形装飾・ランドマーク → 聖域境界 → 薫香オーラ → 経験石・道具 →
@@ -1698,123 +1851,8 @@ export function renderWorld(
     ctx.globalAlpha = 1;
   }
 
-  // ============================================================
-  //  雰囲気レイヤー(光と闇)── ここから上は「世界」、ここから下は「夜気」
-  // ============================================================
-
-  // --- プレイヤーのランタンを光源とする闇 ---
-  //   visionScale<1 のとき(夜啼く女王の夜啼き)は灯が狭まり、周縁がより深い闇に沈む。
-  const lx = wx(p.x);
-  const ly = wy(p.y);
-  const flicker = 1 + Math.sin(world.t * 9) * 0.015 + Math.sin(world.t * 23) * 0.008;
-  const vis = world.visionScale ?? 1;
-  const lightR = Math.min(vw, vh) * 0.66 * flicker * vis;
-  const constrict = 1 - vis; // 0=通常 〜 0.42=最大制限
-  const dark = ctx.createRadialGradient(lx, ly, lightR * 0.34, lx, ly, lightR);
-  dark.addColorStop(0, "rgba(4,2,9,0)");
-  dark.addColorStop(0.7, `rgba(4,2,9,${0.32 + constrict * 0.5})`);
-  dark.addColorStop(1, `rgba(2,1,5,${0.62 + constrict * 0.85})`);
-  ctx.fillStyle = dark;
-  ctx.fillRect(0, 0, vw, vh);
-
-  // 温かいランタンの芯光(加算)
-  ctx.globalCompositeOperation = "lighter";
-  const warm = ctx.createRadialGradient(lx, ly, 2, lx, ly, 140 * flicker);
-  warm.addColorStop(0, "rgba(255,214,140,0.16)");
-  warm.addColorStop(0.5, "rgba(217,164,65,0.06)");
-  warm.addColorStop(1, "rgba(217,164,65,0)");
-  ctx.fillStyle = warm;
-  ctx.beginPath();
-  ctx.arc(lx, ly, 140 * flicker, 0, TAU);
-  ctx.fill();
-  ctx.globalCompositeOperation = "source-over";
-
-  // --- 血月(天体・固定位置・コロナ付き) ---
-  {
-    const mx = vw - 124;
-    const my = 112;
-    const pulse = 1 + Math.sin(world.t * 0.7) * 0.04;
-    // コロナ
-    ctx.globalCompositeOperation = "lighter";
-    const corona = ctx.createRadialGradient(mx, my, 8, mx, my, 240 * pulse);
-    corona.addColorStop(0, "rgba(200,50,62,0.20)");
-    corona.addColorStop(0.35, "rgba(170,40,55,0.07)");
-    corona.addColorStop(1, "rgba(170,40,55,0)");
-    ctx.fillStyle = corona;
-    ctx.beginPath();
-    ctx.arc(mx, my, 240 * pulse, 0, TAU);
-    ctx.fill();
-    ctx.globalCompositeOperation = "source-over";
-    // 月本体
-    const disc = ctx.createRadialGradient(mx - 10, my - 10, 4, mx, my, 42);
-    disc.addColorStop(0, "#e87681");
-    disc.addColorStop(0.6, "#c8323e");
-    disc.addColorStop(1, "#8f2230");
-    ctx.fillStyle = disc;
-    ctx.beginPath();
-    ctx.arc(mx, my, 40, 0, TAU);
-    ctx.fill();
-    // 海(模様)
-    ctx.fillStyle = "rgba(90,20,30,0.4)";
-    ctx.beginPath();
-    ctx.arc(mx - 12, my - 6, 8, 0, TAU);
-    ctx.arc(mx + 10, my + 9, 11, 0, TAU);
-    ctx.arc(mx + 4, my - 14, 5, 0, TAU);
-    ctx.fill();
-    // 欠け(三日月の影)
-    ctx.fillStyle = "#070410";
-    ctx.beginPath();
-    ctx.arc(mx - 17, my - 13, 36, 0, TAU);
-    ctx.fill();
-  }
-
-  // --- 周縁の微塵(ランタンに舞う塵・加算) ---
-  ctx.globalCompositeOperation = "lighter";
-  for (let i = 0; i < 40; i++) {
-    const seedx = hash2(i + 1, 5);
-    const seedy = hash2(7, i + 3);
-    const speed = 6 + seedx * 10;
-    const dx = ((seedx * vw - camX * 0.2) % vw + vw) % vw;
-    const dy = (((seedy * vh - world.t * speed) % vh) + vh) % vh;
-    const tw = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(world.t * 2 + i));
-    // 光源に近いほど明るい
-    const dist = Math.hypot(dx - lx, dy - ly);
-    const near = Math.max(0, 1 - dist / (lightR * 0.9));
-    const a = 0.05 + 0.18 * tw * near;
-    ctx.fillStyle = i % 3 === 0 ? `rgba(217,164,65,${a})` : `rgba(232,220,195,${a})`;
-    ctx.beginPath();
-    ctx.arc(dx, dy, 0.7 + tw * 1.1, 0, TAU);
-    ctx.fill();
-  }
-  ctx.globalCompositeOperation = "source-over";
-
-  // --- 縁の重さ(画面四隅をわずかに沈める) ---
-  const edge = ctx.createRadialGradient(vw / 2, vh / 2, Math.min(vw, vh) * 0.55, vw / 2, vh / 2, Math.max(vw, vh) * 0.78);
-  edge.addColorStop(0, "rgba(7,4,16,0)");
-  edge.addColorStop(1, "rgba(3,1,7,0.5)");
-  ctx.fillStyle = edge;
-  ctx.fillRect(0, 0, vw, vh);
-
-  // --- 瘴気の鈍足デバフ(画面四隅に毒の緑が滲む) ---
-  if ((world.playerSlow ?? 0) > 0) {
-    const a = Math.min(1, world.playerSlow / 0.5);
-    const poison = ctx.createRadialGradient(vw / 2, vh / 2, Math.min(vw, vh) * 0.4, vw / 2, vh / 2, Math.max(vw, vh) * 0.72);
-    poison.addColorStop(0, "rgba(90,140,50,0)");
-    poison.addColorStop(1, `rgba(110,170,60,${a * 0.32})`);
-    ctx.fillStyle = poison;
-    ctx.fillRect(0, 0, vw, vh);
-  }
-
-  // --- 被弾フラッシュ(緋い明滅・最前面) ---
-  if (world.flash > 0) {
-    ctx.globalCompositeOperation = "lighter";
-    const f = ctx.createRadialGradient(lx, ly, 40, lx, ly, Math.max(vw, vh) * 0.7);
-    f.addColorStop(0, `rgba(200,50,62,${world.flash * 0.1})`);
-    f.addColorStop(1, `rgba(255,60,75,${world.flash * 0.5})`);
-    ctx.fillStyle = f;
-    ctx.fillRect(0, 0, vw, vh);
-    ctx.globalCompositeOperation = "source-over";
-  }
+  // --- 雰囲気(光と闇): ランタン光・血月・微塵・縁・瘴気・被弾フラッシュ ---
+  drawAtmosphere(v);
 
   // --- 特異種の画面外マーカー(視界外にいる間も存在を知らせる) ---
   drawVariantMarkers(ctx, vw, vh, world, camX, camY);
@@ -1823,32 +1861,7 @@ export function renderWorld(
   drawMinimap(ctx, vw, vh, world);
 
   // --- 再開カウントダウン(構えの間) ---
-  if (world.grace > 0 && world.graceMax > 0) {
-    ctx.fillStyle = "rgba(6,3,12,0.45)";
-    ctx.fillRect(0, 0, vw, vh);
-    const cxp = vw / 2;
-    const cyp = vh / 2;
-    const n = Math.ceil(world.grace);
-    const frac = world.grace / world.graceMax;
-    // 細るリング
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = "rgba(232,220,195,0.18)";
-    ctx.beginPath();
-    ctx.arc(cxp, cyp - 6, 54, 0, TAU);
-    ctx.stroke();
-    ctx.strokeStyle = "rgba(200,50,62,0.9)";
-    ctx.beginPath();
-    ctx.arc(cxp, cyp - 6, 54, -Math.PI / 2, -Math.PI / 2 + TAU * frac);
-    ctx.stroke();
-    ctx.fillStyle = "#e8dcc3";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = '600 52px "IBM Plex Mono", monospace';
-    ctx.fillText(String(n), cxp, cyp - 4);
-    ctx.font = '600 15px "Shippori Mincho", serif';
-    ctx.fillStyle = "rgba(232,220,195,0.7)";
-    ctx.fillText("構 え よ", cxp, cyp + 54);
-  }
+  drawGrace(v);
 
   ctx.restore();
 }
