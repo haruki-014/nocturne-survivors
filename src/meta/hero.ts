@@ -110,9 +110,11 @@ export interface HeroStats {
 export function heroStats(prev: Profile): HeroStats {
   const h = prev.hero;
   const level = levelFromXp(h.xp);
+  // レベルによる基礎値(装備なしでも少しずつ伸びる土台)
   let atk = 6 + (level - 1) * 1.6;
   let maxHp = 60 + (level - 1) * 10;
-  let atkSpeed = 1.0;
+  let atkSpeed = 1.0; // 攻撃速度(回/秒)。護符の haste で上がる
+  // 装備3スロット(武器=攻撃 / 鎧=HP / 護符=手数)の補正を加算
   for (const slot of SLOTS) {
     const it = h.equipped[slot];
     if (!it) continue;
@@ -120,25 +122,37 @@ export function heroStats(prev: Profile): HeroStats {
     maxHp += it.hp;
     atkSpeed += it.haste;
   }
-  atkSpeed = Math.min(4, atkSpeed);
+  atkSpeed = Math.min(4, atkSpeed); // 手数は上限を設けて青天井を防ぐ
   return { level, maxHp, atk, atkSpeed, dps: atk * atkSpeed };
 }
 
 // ---- ウェーブ(深度)ごとの仕様 ----
+//   深度 depth が上がるほど、敵は数(waveCount)・硬さ(enemyHpAt)・打撃(enemyAtkAt)が
+//   線形に増える。装備で攻撃/HP/手数が伸びれば、より深い波まで“勝ち切れる”ようになる、
+//   という単純で予測しやすいカーブにしてある(数値はここだけで調整できる)。
 export const ENEMY_MELEE_CD = 1.1; // 敵の打撃間隔(秒)
-export const waveCount = (depth: number): number => Math.min(6, 3 + Math.floor(depth / 4));
-export const enemyHpAt = (depth: number): number => 14 + depth * 10;
-export const enemyAtkAt = (depth: number): number => 2 + depth * 1.4;
-export const xpPerKillAt = (depth: number): number => 4 + depth * 2;
+export const waveCount = (depth: number): number => Math.min(6, 3 + Math.floor(depth / 4)); // 1波の敵数(3→最大6)
+export const enemyHpAt = (depth: number): number => 14 + depth * 10; // 敵1体のHP
+export const enemyAtkAt = (depth: number): number => 2 + depth * 1.4; // 敵の1撃ダメージ
+export const xpPerKillAt = (depth: number): number => 4 + depth * 2; // 撃破1体あたりのXP
 
-/** その装備で“勝ち切れる”最深ウェーブ。放置の落ち着き先＝壁の目安。 */
+/**
+ * その装備で“勝ち切れる”最深ウェーブ。放置(オフライン)精算の落ち着き先であり、
+ * ライブ戦闘でも実質の壁になる目安。
+ *
+ * 考え方: 深度 d の波を「先頭から1体ずつ縦列で削る」と仮定すると、
+ *   ・殲滅にかかる時間  clearTime = (敵数 × 敵HP) / 自機DPS
+ *   ・その間に受ける総ダメ dmg   = 敵の打撃 × (clearTime / 打撃間隔)   ※殴るのは先頭の1体だけ
+ *   ・その間の微回復       regen  = 最大HP × 0.04 × clearTime
+ * 「最大HP + regen が dmg(+5%の余裕) を上回る」最も深い d を探す。
+ * 浅い順に試して最初に破綻した手前を壁とする(単調なので break で十分)。
+ */
 export function sustainableDepth(stats: HeroStats): number {
   let best = 1;
   for (let d = 1; d <= 500; d++) {
     const clearTime = (waveCount(d) * enemyHpAt(d)) / Math.max(1, stats.dps);
-    // 敵は縦列に並び、先頭の一体だけが交戦して攻撃する(ライブ挙動と一致)。
-    const dmg = enemyAtkAt(d) * (clearTime / ENEMY_MELEE_CD);
-    const regen = stats.maxHp * 0.04 * clearTime; // 戦闘中の微回復
+    const dmg = enemyAtkAt(d) * (clearTime / ENEMY_MELEE_CD); // 先頭の一体だけが攻撃(ライブ挙動と一致)
+    const regen = stats.maxHp * 0.04 * clearTime;
     if (stats.maxHp + regen > dmg * 1.05) best = d;
     else break;
   }

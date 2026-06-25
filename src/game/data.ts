@@ -536,7 +536,10 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
 
 // ------------------------------------------------------------
 // ボス図鑑 ── ボス出現時はこの中からランダムで1体が選ばれる(直前と同じは避ける)。
-//   ENEMIES.boss を基準に各倍率で個性付け。art は描画の絵柄、ranged は呪弾を撃つか。
+//   個性付けは3層: ①ステータス倍率(hpMul/speedMul/dmgMul/radiusMul を ENEMIES.boss に乗算)、
+//   ②固有能力(ability。下の BossAbility を engine.ts の updateBossAbility が解釈)、
+//   ③見た目(art=描画の絵柄、color/eye=配色)。ranged は追尾しつつ呪弾を撃つか。
+//   trait は図鑑・出現演出に出す能力の一言。新ボスはこの配列に1行足すだけで増やせる。
 // ------------------------------------------------------------
 export type BossArt = "count" | "boneKing" | "plagueTitan" | "wraithQueen" | "ashHerald";
 
