@@ -1117,37 +1117,23 @@ const WISPS = Array.from({ length: 7 }, (_, i) => ({
 // ---------- メイン描画 ----------
 
 /**
- * World を読んで 1 フレームを Canvas2D に描く中心関数(状態は読むだけ・変更しない)。
- * カメラは自機中心(camX/camY)。描く順序は奥→手前:
- *   背景/血月の帯 → 地形装飾・ランドマーク → 聖域境界 → 薫香オーラ → 経験石・道具 →
- *   ボス能力オーラ → 敵 → 自機 → 投射物 → 敵弾 → 雷 → 粒子 → ダメージ数字 →
- *   〔光と闇〕ランタン光/血月/微塵/被弾フラッシュ → 画面外マーカー → ミニマップ → 構え表示。
- * 重い図形は makeSprite でキャッシュ済みのものを drawImage する。
+ * 描画パスが共有するカメラ文脈。renderWorld が毎フレーム1つ組み立て、各 drawXxx へ渡す。
+ * camX/camY = 自機中心のカメラ左上(画面シェイク込み)。wx/wy = ワールド座標→画面座標。
  */
-export function renderWorld(
-  ctx: CanvasRenderingContext2D,
-  vw: number,
-  vh: number,
-  world: World,
-  settings: Settings,
-  dpr: number,
-): void {
-  const p = world.player;
-  ctx.save();
-  ctx.scale(dpr, dpr);
+interface View {
+  ctx: CanvasRenderingContext2D;
+  vw: number;
+  vh: number;
+  world: World;
+  camX: number;
+  camY: number;
+  wx: (x: number) => number;
+  wy: (y: number) => number;
+}
 
-  // 画面シェイク
-  let sx = 0;
-  let sy = 0;
-  if (settings.screenShake && world.shake > 0) {
-    sx = (Math.random() - 0.5) * world.shake * 14;
-    sy = (Math.random() - 0.5) * world.shake * 14;
-  }
-  const camX = p.x - vw / 2 + sx;
-  const camY = p.y - vh / 2 + sy;
-  const wx = (x: number) => x - camX;
-  const wy = (y: number) => y - camY;
-
+/** 背景: 夜の大地のグラデーション、血月の緋い帯、奥に漂う霧。 */
+function drawBackdrop(v: View): void {
+  const { ctx, vw, vh, world, camX, camY } = v;
   // --- 背景(夜の大地:中心がわずかに温かいグラデーション) ---
   const bg = ctx.createRadialGradient(vw / 2, vh / 2, 40, vw / 2, vh / 2, Math.max(vw, vh) * 0.82);
   bg.addColorStop(0, "#140d22");
@@ -1182,7 +1168,11 @@ export function renderWorld(
     ctx.fill();
   }
   ctx.globalCompositeOperation = "source-over";
+}
 
+/** 地表: 大型ランドマーク(枯木/霊廟/崩れ門)・墓地の小物・漂う鬼火。カメラ追従で決定的に散布。 */
+function drawTerrain(v: View): void {
+  const { ctx, vw, vh, world, camX, camY } = v;
   // 大型ランドマーク(粗いグリッドで疎らに。枯れ木/霊廟/崩れ門。影を落として地に立たせる)
   const LCELL = 384;
   const lx0 = Math.floor(camX / LCELL) - 1;
@@ -1250,32 +1240,71 @@ export function renderWorld(
     ctx.fill();
   }
   ctx.globalCompositeOperation = "source-over";
+}
 
-  // --- 聖域の境界(逃げ場の果て) ---
-  {
-    const bx = wx(0);
-    const by = wy(0);
-    // 境界の外は一段深い闇に沈める
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(bx, by, ARENA_RADIUS, 0, TAU);
-    ctx.rect(vw + 400, -400, -(vw + 800), vh + 800); // 偶奇規則で「円の外側」を塗る
-    ctx.fillStyle = "rgba(3,1,7,0.55)";
-    ctx.fill("evenodd");
-    ctx.restore();
-    // 緋く脈打つ結界のリング
-    const pulse = 0.6 + 0.4 * Math.sin(world.t * 1.6);
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = `rgba(200,50,62,${0.3 + 0.2 * pulse})`;
-    ctx.beginPath();
-    ctx.arc(bx, by, ARENA_RADIUS, 0, TAU);
-    ctx.stroke();
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = "rgba(217,164,65,0.22)";
-    ctx.beginPath();
-    ctx.arc(bx, by, ARENA_RADIUS - 6, 0, TAU);
-    ctx.stroke();
+/** 聖域の境界: 円外を一段深い闇に沈め、緋く脈打つ結界リングを描く。 */
+function drawArena(v: View): void {
+  const { ctx, vw, vh, world, wx, wy } = v;
+  const bx = wx(0);
+  const by = wy(0);
+  // 境界の外は一段深い闇に沈める
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(bx, by, ARENA_RADIUS, 0, TAU);
+  ctx.rect(vw + 400, -400, -(vw + 800), vh + 800); // 偶奇規則で「円の外側」を塗る
+  ctx.fillStyle = "rgba(3,1,7,0.55)";
+  ctx.fill("evenodd");
+  ctx.restore();
+  // 緋く脈打つ結界のリング
+  const pulse = 0.6 + 0.4 * Math.sin(world.t * 1.6);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = `rgba(200,50,62,${0.3 + 0.2 * pulse})`;
+  ctx.beginPath();
+  ctx.arc(bx, by, ARENA_RADIUS, 0, TAU);
+  ctx.stroke();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = "rgba(217,164,65,0.22)";
+  ctx.beginPath();
+  ctx.arc(bx, by, ARENA_RADIUS - 6, 0, TAU);
+  ctx.stroke();
+}
+
+/**
+ * World を読んで 1 フレームを Canvas2D に描く中心関数(状態は読むだけ・変更しない)。
+ * カメラは自機中心(camX/camY)。描く順序は奥→手前:
+ *   背景/血月の帯 → 地形装飾・ランドマーク → 聖域境界 → 薫香オーラ → 経験石・道具 →
+ *   ボス能力オーラ → 敵 → 自機 → 投射物 → 敵弾 → 雷 → 粒子 → ダメージ数字 →
+ *   〔光と闇〕ランタン光/血月/微塵/被弾フラッシュ → 画面外マーカー → ミニマップ → 構え表示。
+ * 重い図形は makeSprite でキャッシュ済みのものを drawImage する。
+ */
+export function renderWorld(
+  ctx: CanvasRenderingContext2D,
+  vw: number,
+  vh: number,
+  world: World,
+  settings: Settings,
+  dpr: number,
+): void {
+  const p = world.player;
+  ctx.save();
+  ctx.scale(dpr, dpr);
+
+  // 画面シェイク
+  let sx = 0;
+  let sy = 0;
+  if (settings.screenShake && world.shake > 0) {
+    sx = (Math.random() - 0.5) * world.shake * 14;
+    sy = (Math.random() - 0.5) * world.shake * 14;
   }
+  const camX = p.x - vw / 2 + sx;
+  const camY = p.y - vh / 2 + sy;
+  const wx = (x: number) => x - camX;
+  const wy = (y: number) => y - camY;
+  const v: View = { ctx, vw, vh, world, camX, camY, wx, wy };
+
+  drawBackdrop(v); // 背景・血月の帯・霧
+  drawTerrain(v); // ランドマーク・地表の小物・鬼火
+  drawArena(v); // 聖域の境界(結界リング)
 
   // --- 薫香オーラ ---
   if (world.auraR > 0) {
