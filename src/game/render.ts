@@ -1422,44 +1422,10 @@ function drawGrace(v: View): void {
   ctx.fillText("構 え よ", cxp, cyp + 54);
 }
 
-/**
- * World を読んで 1 フレームを Canvas2D に描く中心関数(状態は読むだけ・変更しない)。
- * カメラは自機中心(camX/camY)。描く順序は奥→手前:
- *   背景/血月の帯 → 地形装飾・ランドマーク → 聖域境界 → 薫香オーラ → 経験石・道具 →
- *   ボス能力オーラ → 敵 → 自機 → 投射物 → 敵弾 → 雷 → 粒子 → ダメージ数字 →
- *   〔光と闇〕ランタン光/血月/微塵/被弾フラッシュ → 画面外マーカー → ミニマップ → 構え表示。
- * 重い図形は makeSprite でキャッシュ済みのものを drawImage する。
- */
-export function renderWorld(
-  ctx: CanvasRenderingContext2D,
-  vw: number,
-  vh: number,
-  world: World,
-  settings: Settings,
-  dpr: number,
-): void {
+/** 薫香オーラ: 自機を囲む緑の放射グラデ＋破線リング。 */
+function drawAura(v: View): void {
+  const { ctx, world, wx, wy } = v;
   const p = world.player;
-  ctx.save();
-  ctx.scale(dpr, dpr);
-
-  // 画面シェイク
-  let sx = 0;
-  let sy = 0;
-  if (settings.screenShake && world.shake > 0) {
-    sx = (Math.random() - 0.5) * world.shake * 14;
-    sy = (Math.random() - 0.5) * world.shake * 14;
-  }
-  const camX = p.x - vw / 2 + sx;
-  const camY = p.y - vh / 2 + sy;
-  const wx = (x: number) => x - camX;
-  const wy = (y: number) => y - camY;
-  const v: View = { ctx, vw, vh, world, camX, camY, wx, wy };
-
-  drawBackdrop(v); // 背景・血月の帯・霧
-  drawTerrain(v); // ランドマーク・地表の小物・鬼火
-  drawArena(v); // 聖域の境界(結界リング)
-
-  // --- 薫香オーラ ---
   if (world.auraR > 0) {
     const ar = world.auraR;
     const g = ctx.createRadialGradient(wx(p.x), wy(p.y), ar * 0.4, wx(p.x), wy(p.y), ar);
@@ -1478,8 +1444,11 @@ export function renderWorld(
     ctx.stroke();
     ctx.setLineDash([]);
   }
+}
 
-  // --- 経験石・ピックアップ(石は加算合成で淡く灯る) ---
+/** 経験石・ピックアップ(石は加算合成で淡く灯る)。 */
+function drawGemsAndPickups(v: View): void {
+  const { ctx, world, wx, wy } = v;
   ctx.globalCompositeOperation = "lighter";
   for (const g of world.gems) {
     const spr = gemSprite(g.big);
@@ -1526,9 +1495,11 @@ export function renderWorld(
     const spr = pickupSprite(pk.kind);
     ctx.drawImage(spr, wx(pk.x) - spr.width / 2, wy(pk.y) - spr.height / 2 + bob);
   }
+}
 
-  // --- 敵 ---
-  // --- ボス固有能力のオーラ(敵スプライトの下に敷く) ---
+/** ボス固有能力のオーラ(敵スプライトの下に敷く)。 */
+function drawBossAuras(v: View): void {
+  const { ctx, world, wx, wy } = v;
   if (world.boss) {
     const b = world.boss;
     const bdef = BOSSES_BY_ID[b.bossType ?? ""];
@@ -1578,7 +1549,12 @@ export function renderWorld(
       ctx.setLineDash([]);
     }
   }
+}
 
+/** 敵スプライト: 影だまり・変種オーラ・本体・HPリング。 */
+function drawEnemies(v: View): void {
+  const { ctx, vw, vh, world, wx, wy } = v;
+  const p = world.player;
   for (const e of world.enemies) {
     const ex = wx(e.x);
     const ey = wy(e.y);
@@ -1637,34 +1613,40 @@ export function renderWorld(
       ctx.stroke();
     }
   }
+}
 
-  // --- プレイヤー ---
-  {
-    const skin = SKINS_BY_ID[world.skinId] ?? SKINS_BY_ID[DEFAULT_SKIN];
-    const spr = playerSprite(skin);
-    const bob = p.moving ? Math.abs(Math.sin(p.anim * 11)) * 3 : Math.sin(world.t * 2.4) * 1.2;
-    const flip = p.dirX < 0 ? -1 : 1;
-    // 影
-    ctx.fillStyle = "rgba(0,0,0,0.45)";
-    ctx.beginPath();
-    ctx.ellipse(wx(p.x), wy(p.y) + 18, 13, 5, 0, 0, TAU);
-    ctx.fill();
-    ctx.save();
-    ctx.translate(wx(p.x), wy(p.y) - bob);
-    ctx.scale(flip, 1);
-    if (p.invuln > 0 && Math.floor(world.t * 18) % 2 === 0) ctx.globalAlpha = 0.4;
-    ctx.drawImage(spr, -spr.width / 2, -spr.height / 2);
-    ctx.restore();
-    // 足元のHPバー
-    const bw = 34;
-    const ratio = Math.max(0, p.hp / p.maxHp);
-    ctx.fillStyle = "rgba(10,6,18,0.8)";
-    ctx.fillRect(wx(p.x) - bw / 2, wy(p.y) + 24, bw, 5);
-    ctx.fillStyle = ratio > 0.35 ? "#c8323e" : "#ff4d5a";
-    ctx.fillRect(wx(p.x) - bw / 2 + 1, wy(p.y) + 25, (bw - 2) * ratio, 3);
-  }
+/** 自機スプライト: 影・本体(点滅)・足元HPバー。 */
+function drawPlayer(v: View): void {
+  const { ctx, world, wx, wy } = v;
+  const p = world.player;
+  const skin = SKINS_BY_ID[world.skinId] ?? SKINS_BY_ID[DEFAULT_SKIN];
+  const spr = playerSprite(skin);
+  const bob = p.moving ? Math.abs(Math.sin(p.anim * 11)) * 3 : Math.sin(world.t * 2.4) * 1.2;
+  const flip = p.dirX < 0 ? -1 : 1;
+  // 影
+  ctx.fillStyle = "rgba(0,0,0,0.45)";
+  ctx.beginPath();
+  ctx.ellipse(wx(p.x), wy(p.y) + 18, 13, 5, 0, 0, TAU);
+  ctx.fill();
+  ctx.save();
+  ctx.translate(wx(p.x), wy(p.y) - bob);
+  ctx.scale(flip, 1);
+  if (p.invuln > 0 && Math.floor(world.t * 18) % 2 === 0) ctx.globalAlpha = 0.4;
+  ctx.drawImage(spr, -spr.width / 2, -spr.height / 2);
+  ctx.restore();
+  // 足元のHPバー
+  const bw = 34;
+  const ratio = Math.max(0, p.hp / p.maxHp);
+  ctx.fillStyle = "rgba(10,6,18,0.8)";
+  ctx.fillRect(wx(p.x) - bw / 2, wy(p.y) + 24, bw, 5);
+  ctx.fillStyle = ratio > 0.35 ? "#c8323e" : "#ff4d5a";
+  ctx.fillRect(wx(p.x) - bw / 2 + 1, wy(p.y) + 25, (bw - 2) * ratio, 3);
+}
 
-  // --- 投射物(発光体は加算合成 + 滲み) ---
+/** 投射物(発光体は加算合成 + 滲み)と宝珠の鎖。 */
+function drawProjectiles(v: View): void {
+  const { ctx, world, wx, wy } = v;
+  const p = world.player;
   for (const pr of world.projectiles) {
     const px = wx(pr.x);
     const py = wy(pr.y);
@@ -1754,8 +1736,11 @@ export function renderWorld(
     ctx.lineTo(wx(pr.x), wy(pr.y));
     ctx.stroke();
   }
+}
 
-  // --- 敵の呪弾(紫の凶弾・加算合成で禍々しく灯す) ---
+/** 敵の呪弾(紫の凶弾・加算合成で禍々しく灯す)。 */
+function drawEnemyShots(v: View): void {
+  const { ctx, world, wx, wy } = v;
   ctx.globalCompositeOperation = "lighter";
   for (const s of world.enemyShots) {
     const sx2 = wx(s.x);
@@ -1784,8 +1769,11 @@ export function renderWorld(
     ctx.fill();
   }
   ctx.globalCompositeOperation = "source-over";
+}
 
-  // --- 雷(加算合成で白熱) ---
+/** 雷(加算合成で白熱): 柱・グロー・着弾閃光。 */
+function drawBolts(v: View): void {
+  const { ctx, world, wx, wy } = v;
   ctx.globalCompositeOperation = "lighter";
   for (const b of world.bolts) {
     const bx = wx(b.x);
@@ -1821,8 +1809,11 @@ export function renderWorld(
     ctx.fill();
   }
   ctx.globalCompositeOperation = "source-over";
+}
 
-  // --- パーティクル ---
+/** パーティクル(加算合成で発光)。 */
+function drawParticles(v: View): void {
+  const { ctx, world, wx, wy } = v;
   ctx.globalCompositeOperation = "lighter";
   for (const pa of world.particles) {
     const a = pa.life / pa.maxLife;
@@ -1834,8 +1825,11 @@ export function renderWorld(
   }
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
+}
 
-  // --- ダメージ数字 ---
+/** ダメージ数字(settings.damageNumbers が有効な場合のみ描画)。 */
+function drawTexts(v: View, settings: Settings): void {
+  const { ctx, world, wx, wy } = v;
   if (settings.damageNumbers) {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -1850,6 +1844,55 @@ export function renderWorld(
     }
     ctx.globalAlpha = 1;
   }
+}
+
+/**
+ * World を読んで 1 フレームを Canvas2D に描く中心関数(状態は読むだけ・変更しない)。
+ * カメラは自機中心(camX/camY)。描く順序は奥→手前:
+ *   背景/血月の帯 → 地形装飾・ランドマーク → 聖域境界 → 薫香オーラ → 経験石・道具 →
+ *   ボス能力オーラ → 敵 → 自機 → 投射物 → 敵弾 → 雷 → 粒子 → ダメージ数字 →
+ *   〔光と闇〕ランタン光/血月/微塵/被弾フラッシュ → 画面外マーカー → ミニマップ → 構え表示。
+ * 重い図形は makeSprite でキャッシュ済みのものを drawImage する。
+ */
+export function renderWorld(
+  ctx: CanvasRenderingContext2D,
+  vw: number,
+  vh: number,
+  world: World,
+  settings: Settings,
+  dpr: number,
+): void {
+  const p = world.player;
+  ctx.save();
+  ctx.scale(dpr, dpr);
+
+  // 画面シェイク
+  let sx = 0;
+  let sy = 0;
+  if (settings.screenShake && world.shake > 0) {
+    sx = (Math.random() - 0.5) * world.shake * 14;
+    sy = (Math.random() - 0.5) * world.shake * 14;
+  }
+  const camX = p.x - vw / 2 + sx;
+  const camY = p.y - vh / 2 + sy;
+  const wx = (x: number) => x - camX;
+  const wy = (y: number) => y - camY;
+  const v: View = { ctx, vw, vh, world, camX, camY, wx, wy };
+
+  drawBackdrop(v); // 背景・血月の帯・霧
+  drawTerrain(v); // ランドマーク・地表の小物・鬼火
+  drawArena(v); // 聖域の境界(結界リング)
+
+  drawAura(v);           // 薫香オーラ
+  drawGemsAndPickups(v); // 経験石・ピックアップ
+  drawBossAuras(v);      // ボス固有能力のオーラ
+  drawEnemies(v);        // 敵スプライト
+  drawPlayer(v);         // 自機
+  drawProjectiles(v);    // 投射物
+  drawEnemyShots(v);     // 敵の呪弾
+  drawBolts(v);          // 雷
+  drawParticles(v);      // パーティクル
+  drawTexts(v, settings); // ダメージ数字
 
   // --- 雰囲気(光と闇): ランタン光・血月・微塵・縁・瘴気・被弾フラッシュ ---
   drawAtmosphere(v);
