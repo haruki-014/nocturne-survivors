@@ -17,7 +17,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import type { Enemy, EnemyKind, EnemyVariant, Renderer, Settings, World } from "./types";
-import { ARENA_RADIUS, BOSSES, BOSSES_BY_ID, CURIOS_BY_ID, DEFAULT_SKIN, ENEMIES, RECOLOR_PALETTE, SKINS_BY_ID, type BossArt, type SkinDef } from "./data";
+import { ARENA_RADIUS, BOSSES, BOSSES_BY_ID, BOSS_WINDUP, CURIOS_BY_ID, DEFAULT_SKIN, ENEMIES, RECOLOR_PALETTE, SKINS_BY_ID, type BossArt, type SkinDef } from "./data";
 
 const TAU = Math.PI * 2;
 
@@ -40,6 +40,14 @@ function shade(hex: string, amt: number): string {
   }
   const h = (v: number) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0");
   return `#${h(r)}${h(g)}${h(b)}`;
+}
+
+/** #rrggbb を rgba(r,g,b,a) へ。未知の形式はそのまま返す(既に rgba 等の場合)。 */
+function withAlpha(hex: string, a: number): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
 // ---------- スプライトキャッシュ ----------
@@ -1498,6 +1506,117 @@ function drawGemsAndPickups(v: View): void {
 }
 
 /** ボス固有能力のオーラ(敵スプライトの下に敷く)。 */
+/**
+ * ボス能力の予備動作(チャージ)。windup>0 の間、能力別の溜め演出をボス色で描く。
+ * 進捗 prog = 1 - windup/BOSS_WINDUP(0:溜め始め → 1:発動直前)。状態は読むだけ。
+ */
+function drawBossTelegraph(v: View): void {
+  const { ctx, world, wx, wy } = v;
+  const b = world.boss;
+  if (!b || b.windup <= 0) return;
+  const def = BOSSES_BY_ID[b.bossType ?? ""];
+  if (!def) return;
+  const prog = Math.max(0, Math.min(1, 1 - b.windup / BOSS_WINDUP));
+  const bx = wx(b.x);
+  const by = wy(b.y);
+  const col = def.color;
+  const eye = def.eye;
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+
+  if (def.ability === "raise") {
+    // 骸の王: プレイヤーを囲う6点(発動地点)に骨の警告マーカーを灯す
+    const p = world.player;
+    const n = 6;
+    for (let i = 0; i < n; i++) {
+      const ang = b.windAng + (i / n) * TAU;
+      const mx = wx(p.x + Math.cos(ang) * 230);
+      const my = wy(p.y + Math.sin(ang) * 230);
+      const rr = 6 + prog * 16;
+      ctx.strokeStyle = withAlpha(eye, 0.35 + 0.5 * prog);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(mx, my, rr, 0, TAU);
+      ctx.stroke();
+      // 十字の亀裂(蘇生の予兆)
+      ctx.beginPath();
+      ctx.moveTo(mx - rr, my); ctx.lineTo(mx + rr, my);
+      ctx.moveTo(mx, my - rr); ctx.lineTo(mx, my + rr);
+      ctx.stroke();
+    }
+    ctx.restore();
+    return;
+  }
+
+  // ボス中心の溜め(swarm/miasma/wail/rally 共通の核 + 能力別の差し色)
+  const coreCol = def.ability === "swarm" ? col : def.ability === "miasma" ? col : def.ability === "wail" ? eye : col;
+  // 内核の発光(発動に向けて強まる)
+  const coreR = b.radius * (0.6 + prog * 0.7);
+  const cg = ctx.createRadialGradient(bx, by, 1, bx, by, coreR);
+  cg.addColorStop(0, withAlpha(coreCol, 0.5 * prog + 0.1));
+  cg.addColorStop(1, withAlpha(coreCol, 0));
+  ctx.fillStyle = cg;
+  ctx.beginPath();
+  ctx.arc(bx, by, coreR, 0, TAU);
+  ctx.fill();
+
+  if (def.ability === "swarm" || def.ability === "wail") {
+    // 吸血卿/女王: 外周から内へ収束する筋(血霧/紫光が集まる)
+    const n = 10;
+    const inR = b.radius * 1.1;
+    const outR = b.radius * (3.2 - prog * 1.8); // 進行で内へ詰まる
+    ctx.strokeStyle = withAlpha(coreCol, 0.25 + 0.5 * prog);
+    ctx.lineWidth = 2;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU + world.t * 1.5;
+      ctx.beginPath();
+      ctx.moveTo(bx + Math.cos(a) * outR, by + Math.sin(a) * outR);
+      ctx.lineTo(bx + Math.cos(a) * inR, by + Math.sin(a) * inR);
+      ctx.stroke();
+    }
+  } else if (def.ability === "miasma" || def.ability === "rally") {
+    // 巨躯/使者: 発動半径を予告する膨張リング(踏み出して避ける合図)
+    const ringR = b.radius * (1.2 + prog * 2.4);
+    ctx.strokeStyle = withAlpha(coreCol, 0.3 + 0.45 * prog);
+    ctx.lineWidth = 2 + prog * 2;
+    ctx.setLineDash([8, 10]);
+    ctx.lineDashOffset = -world.t * 20;
+    ctx.beginPath();
+    ctx.arc(bx, by, ringR, 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  ctx.restore();
+}
+
+/** ボスの衝波(拡大リング)。色付きの輪＋淡い内側グラデ。damage 有無に依らず同じ意匠。 */
+function drawShockwaves(v: View): void {
+  const { ctx, world, wx, wy } = v;
+  for (const s of world.shockwaves) {
+    const cx = wx(s.x);
+    const cy = wy(s.y);
+    const fade = s.r >= s.maxR ? Math.max(0, s.life / 0.45) : 1; // 終端後はフェード
+    const grow = Math.min(1, s.r / Math.max(1, s.maxR));
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    // 環の前縁(明るい筋)
+    ctx.strokeStyle = withAlpha(s.color, 0.5 * fade);
+    ctx.lineWidth = s.width * (1.1 - 0.5 * grow);
+    ctx.beginPath();
+    ctx.arc(cx, cy, s.r, 0, TAU);
+    ctx.stroke();
+    // 内側へ向かう淡いグラデ(衝波の厚み)
+    const g = ctx.createRadialGradient(cx, cy, Math.max(1, s.r - s.width * 2), cx, cy, s.r);
+    g.addColorStop(0, "rgba(0,0,0,0)");
+    g.addColorStop(1, withAlpha(s.color, 0.18 * fade));
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(cx, cy, s.r, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
 function drawBossAuras(v: View): void {
   const { ctx, world, wx, wy } = v;
   if (world.boss) {
@@ -1912,7 +2031,9 @@ export function renderWorld(
   drawAura(v);           // 薫香オーラ
   drawGemsAndPickups(v); // 経験石・ピックアップ
   drawBossAuras(v);      // ボス固有能力のオーラ
+  drawBossTelegraph(v);  // ボス能力の予備動作(チャージ)
   drawEnemies(v);        // 敵スプライト
+  drawShockwaves(v);     // ボスの衝波(ハザードの拡大リング)
   drawPlayer(v);         // 自機
   drawProjectiles(v);    // 投射物
   drawEnemyShots(v);     // 敵の呪弾

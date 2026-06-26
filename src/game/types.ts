@@ -140,7 +140,26 @@ export interface Enemy {
   wobble: number; // 描画用位相
   shootCd: number; // 遠距離敵の発射クールダウン残り(術者・遠距離ボスが使用)
   abilityCd: number; // ボス固有能力(召喚・分身・咆哮など)の再発動までの残り秒
+  windup: number; // ボス能力の予備動作(チャージ)残り秒。>0 の間はテレグラフを描く
+  windAng: number; // テレグラフ基準角/シード(骸の王の召喚地点など発動位置の予告に使う)
   bossType?: string; // kind==="boss" のとき、どのボスか(見た目・名・挙動を選ぶ)
+}
+
+/**
+ * 拡大する衝波(ハザード)。ボスの予備動作の後に放たれ、環帯を通過する瞬間にだけ当たる。
+ * プレイヤーは環の外/内へ踏み出して回避できる。damage===0 は視覚専用のテレグラフ輪。
+ */
+export interface Shockwave {
+  x: number;
+  y: number;
+  r: number; // 現在半径
+  maxR: number; // 拡大の終端半径
+  speed: number; // 拡大速度 px/s
+  width: number; // 当たり判定の環帯の太さ
+  life: number; // 終端到達後のフェード残り秒
+  color: string;
+  damage: number; // 0=視覚専用
+  hit: boolean; // 既にプレイヤーへ当てたか(一度きり)
 }
 
 /** 敵が放つ呪弾。プレイヤーにのみ当たる。 */
@@ -278,6 +297,7 @@ export interface World {
   derived: Derived;
   enemies: Enemy[];
   enemyShots: EnemyShot[];
+  shockwaves: Shockwave[];
   projectiles: Projectile[];
   gems: Gem[];
   pickups: Pickup[];
@@ -302,6 +322,8 @@ export interface World {
   seenBosses: Set<string>; // このランで遭遇したボス(bossType)
   maxTier: Record<SchoolId, number>; // このランで到達した流派の最高段位
   skinId: string; // 選択中のプレイヤースキン(描画用)
+  sigWield: boolean; // 装いの専用技(秘伝)を所持中か。装備者の特別演出に使う
+  sigColor: string; // 専用技の主色(装備者グロー・統一演出の色)
 }
 
 // ---------- UI との橋渡し ----------

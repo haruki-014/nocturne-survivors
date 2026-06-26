@@ -22,6 +22,7 @@ import {
   ARENA_RADIUS,
   BOSSES,
   BOSSES_BY_ID,
+  BOSS_WINDUP,
   CURIOS,
   DEFAULT_MODE,
   DEFAULT_SKIN,
@@ -310,7 +311,7 @@ export class Engine {
         area: 1, magnet: 70, regen: 0, amountBonus: 0,
         pierceBonus: 0, lifesteal: 0,
       },
-      enemies: [], enemyShots: [], projectiles: [], gems: [], pickups: [],
+      enemies: [], enemyShots: [], shockwaves: [], projectiles: [], gems: [], pickups: [],
       particles: [], texts: [], bolts: [],
       weapons: [{ id: "grimoire", level: 1, cd: 0.4, tick: 0 }],
       passives: [],
@@ -324,6 +325,8 @@ export class Engine {
       seenBosses: new Set<string>(),
       maxTier: { steel: 0, spirit: 0, moon: 0, blood: 0 },
       skinId: this.skinId,
+      sigWield: false,
+      sigColor: SKINS_BY_ID[this.skinId]?.lantern ?? "#d9a441",
     };
   }
 
@@ -379,6 +382,7 @@ export class Engine {
     this.updateProjectiles(dt); // 弾を前進させ、近傍の敵と当たり判定(貫通を消費)
     this.updateEnemies(dt);     // 敵をプレイヤーへ寄せる/夜術師は間合い取り、接触ダメージ
     this.updateEnemyShots(dt);  // 夜術師の呪弾を前進させ自機にのみ当てる
+    this.updateShockwaves(dt);  // ボスの衝波(拡大リング)を広げ、環帯通過で自機に当てる
     this.updateGems(dt);        // 経験石・道具を磁力で吸い寄せ、触れたら取得
     this.updateEffects(dt);     // パーティクル/数字/雷/画面揺れ・赤フラッシュの減衰
     this.updateSpawner(dt);     // 時刻に応じて雑魚/エリート/ボス/夜術師を視界外に湧かす
@@ -1020,70 +1024,115 @@ export class Engine {
   }
 
   /**
-   * ボス固有能力の発動。各ボスを「ただ硬い的」から個性ある一戦に変える。
+   * ボス固有能力の更新。各ボスを「ただ硬い的」から個性ある一戦に変える。
+   * miasma 以外は「待機(abilityCd)→予備動作(windup)→発動(releaseBossAbility)」の2相。
+   * 予備動作中は render の drawBossTelegraph が色付きチャージを描き、攻撃を読ませる。
    *   swarm  … 蝙蝠へ分身(召喚)。打撃の吸血は接触判定側で処理。
-   *   raise  … プレイヤーを囲う骸骨兵を蘇生召喚。
-   *   miasma … 圏内なら鈍足デバフ+継続ダメージ(常時オーラ)。
-   *   wail   … 夜啼きで視界を狭める(視界制限)。呪弾は ranged で別途。
+   *   raise  … windAng 基準の6点に骸骨兵を蘇生召喚(予告地点=出現地点)。
+   *   miasma … 常時の鈍足+DoT(専用処理)に加え、周期的な疫気の衝波(回避可能ハザード)。
+   *   wail   … 夜啼きで視界を狭め、叫喚の衝波を放つ。呪弾は ranged で別途。
    *   rally  … 周囲の雑魚を鼓舞(加速バフ)し、火炎弾を全方位へ放つ。
    */
   private updateBossAbility(e: Enemy, def: BossDef, dist: number, dt: number): void {
     const w = this.world;
-    const p = w.player;
+    // 腐肉の巨躯は常時オーラ+パルスの専用処理
+    if (def.ability === "miasma") { this.updateMiasma(e, def, dist, dt); return; }
+    // 灰燼の使者は圏内の雑魚を常時加速(movement で反映)
+    if (def.ability === "rally") w.bossRally = true;
+
+    // 予備動作 → 発動
+    if (e.windup > 0) {
+      e.windup -= dt;
+      if (e.windup <= 0) this.releaseBossAbility(e, def);
+      return;
+    }
+    // 待機。クールダウンが切れ条件を満たせばチャージ開始
+    e.abilityCd -= dt;
+    if (e.abilityCd <= 0 && this.canStartAbility(def.ability, dist)) {
+      e.abilityCd = this.abilityInterval(def.ability);
+      e.windup = BOSS_WINDUP;
+      if (def.ability === "raise") e.windAng = Math.random() * TAU; // 召喚地点を確定し予告
+    }
+  }
+
+  /** 予備動作後の発動条件(視界外への空撃ちを防ぐ)。 */
+  private canStartAbility(ability: BossAbility, dist: number): boolean {
+    if (ability === "wail") return dist < 1000;
+    return true;
+  }
+
+  /** 能力の再チャージ間隔。windup(予備動作)分を見込み従来の体感間隔に揃える。 */
+  private abilityInterval(ability: BossAbility): number {
+    switch (ability) {
+      case "swarm": return 5.3 + Math.random() * 1.5;
+      case "raise": return 6.8 + Math.random() * 1.5;
+      case "wail": return 6.3 + Math.random() * 2.5;
+      case "rally": return 4.3 + Math.random() * 1.5;
+      default: return 6;
+    }
+  }
+
+  /** 予備動作が満ちた瞬間の発動。能力ごとの「攻撃手法」を放つ。 */
+  private releaseBossAbility(e: Enemy, def: BossDef): void {
+    const w = this.world;
     switch (def.ability) {
-      case "swarm": {
-        e.abilityCd -= dt;
-        if (e.abilityCd <= 0) {
-          e.abilityCd = 6 + Math.random() * 1.5;
-          this.summonSwarm(e);
-        }
+      case "swarm":
+        this.summonSwarm(e);
         break;
-      }
-      case "raise": {
-        e.abilityCd -= dt;
-        if (e.abilityCd <= 0) {
-          e.abilityCd = 7.5 + Math.random() * 1.5;
-          this.raiseSkeletons();
-        }
+      case "raise":
+        this.raiseSkeletons(e.windAng);
         break;
-      }
-      case "miasma": {
-        // 瘴気の圏内に居る間は鈍足を維持し、周期的に蝕む(離れれば自然減衰)
-        const miasmaR = e.radius + 160;
-        if (dist < miasmaR) {
-          w.playerSlow = 0.5;
-          e.abilityCd -= dt;
-          if (e.abilityCd <= 0) {
-            e.abilityCd = 0.6;
-            p.hp -= Math.max(2, Math.round(e.damage * 0.12)) * (1 - this.metaBonus.armor);
-            w.flash = Math.max(w.flash, 0.16);
-            this.burst(p.x, p.y, 4, "#a6d96a", 1.6);
-          }
-        } else {
-          e.abilityCd = 0; // 圏外では即時に蝕めるよう戻す
-        }
-        break;
-      }
       case "wail": {
-        e.abilityCd -= dt;
-        if (e.abilityCd <= 0 && dist < 1000) {
-          e.abilityCd = 7 + Math.random() * 2.5;
-          this.wailT = 4; // 視界を数秒狭める
-          w.shake = Math.min(1, w.shake + 0.4);
-          this.burst(e.x, e.y, 26, def.eye, 4);
-          w.texts.push({ x: e.x, y: e.y - e.radius - 10, text: "夜啼き…", life: 1.4, color: def.eye, size: 15 });
-        }
+        this.wailT = 4; // 視界を数秒狭める
+        w.shake = Math.min(1, w.shake + 0.4);
+        this.burst(e.x, e.y, 26, def.eye, 4);
+        w.texts.push({ x: e.x, y: e.y - e.radius - 10, text: "夜啼き…", life: 1.4, color: def.eye, size: 15 });
+        // 叫喚輪: 紫の衝波が広がる(環帯を踏み越えて避ける)
+        this.emitShockwave(e.x, e.y, e.radius + 260, 560, def.eye, Math.round(e.damage * 0.3));
         break;
       }
-      case "rally": {
-        w.bossRally = true; // 圏内の雑魚を加速(movement で反映)
-        e.abilityCd -= dt;
-        if (e.abilityCd <= 0) {
-          e.abilityCd = 5 + Math.random() * 1.5;
-          this.fireNova(e);
-        }
+      case "rally":
+        this.fireNova(e);
+        // 発動を読ませる視覚専用の焔輪(弾は nova が担当)
+        this.emitShockwave(e.x, e.y, e.radius + 200, 480, def.color, 0);
         break;
+    }
+  }
+
+  /**
+   * 腐肉の巨躯: 圏内では鈍足+周期DoT(常時オーラ)。並行して予備動作付きの疫気の衝波を放つ。
+   * DoT の刻みは shootCd を流用(巨躯は非 ranged で shootCd 未使用)、衝波の間隔は abilityCd。
+   */
+  private updateMiasma(e: Enemy, def: BossDef, dist: number, dt: number): void {
+    const w = this.world;
+    const p = w.player;
+    const miasmaR = e.radius + 160;
+    if (dist < miasmaR) {
+      w.playerSlow = 0.5;
+      e.shootCd -= dt;
+      if (e.shootCd <= 0) {
+        e.shootCd = 0.6;
+        p.hp -= Math.max(2, Math.round(e.damage * 0.12)) * (1 - this.metaBonus.armor);
+        w.flash = Math.max(w.flash, 0.16);
+        this.burst(p.x, p.y, 4, "#a6d96a", 1.6);
       }
+    } else {
+      e.shootCd = 0; // 圏外では即時に蝕めるよう戻す
+    }
+    // 疫気の衝波(予備動作 → 発動)
+    if (e.windup > 0) {
+      e.windup -= dt;
+      if (e.windup <= 0) {
+        this.emitShockwave(e.x, e.y, e.radius + 230, 520, def.color, Math.round(e.damage * 0.4));
+        w.playerSlow = 0.6;
+        this.burst(e.x, e.y, 20, def.color, 3.5);
+      }
+      return;
+    }
+    e.abilityCd -= dt;
+    if (e.abilityCd <= 0) {
+      e.abilityCd = 4 + Math.random() * 1.2;
+      e.windup = BOSS_WINDUP;
     }
   }
 
@@ -1101,12 +1150,11 @@ export class Engine {
     }
   }
 
-  /** 骸の王の召喚: プレイヤーを囲うリング状に骸骨兵を蘇らせる。 */
-  private raiseSkeletons(): void {
+  /** 骸の王の召喚: base 角を起点にプレイヤーを囲う6点へ骸骨兵を蘇らせる(予告地点と一致)。 */
+  private raiseSkeletons(base: number): void {
     const w = this.world;
     const p = w.player;
     const n = 6;
-    const base = Math.random() * TAU;
     const lim = ARENA_RADIUS - 40;
     w.texts.push({ x: p.x, y: p.y - 40, text: "死者復活", life: 1.4, color: "#9ad8ff", size: 15 });
     for (let i = 0; i < n; i++) {
@@ -1165,6 +1213,42 @@ export class Engine {
         w.enemyShots.splice(i, 1);
       }
     }
+  }
+
+  /**
+   * 衝波(拡大リング)の更新。r を speed で広げ、環帯 [r-width, r+width] を自機が通過する
+   * 瞬間にだけ一度命中する(踏み出して回避できる)。終端 maxR で life を減衰させ消す。
+   */
+  private updateShockwaves(dt: number): void {
+    const w = this.world;
+    const p = w.player;
+    for (let i = w.shockwaves.length - 1; i >= 0; i--) {
+      const s = w.shockwaves[i];
+      if (s.r < s.maxR) s.r = Math.min(s.maxR, s.r + s.speed * dt);
+      else s.life -= dt;
+      if (s.life <= 0) {
+        w.shockwaves.splice(i, 1);
+        continue;
+      }
+      if (s.damage > 0 && !s.hit && p.invuln <= 0) {
+        const d = Math.hypot(p.x - s.x, p.y - s.y);
+        if (Math.abs(d - s.r) <= s.width + 12) {
+          s.hit = true;
+          p.hp -= s.damage * (1 - this.metaBonus.armor);
+          p.invuln = PLAYER_HIT_IFRAME;
+          w.flash = PLAYER_HIT_FLASH;
+          w.shake = Math.min(1, w.shake + 0.4);
+          this.burst(p.x, p.y, 10, s.color, 2.6);
+        }
+      }
+    }
+  }
+
+  /** 衝波を1つ放つ。damage===0 なら視覚専用のテレグラフ輪。 */
+  private emitShockwave(x: number, y: number, maxR: number, speed: number, color: string, damage: number): void {
+    this.world.shockwaves.push({
+      x, y, r: 0, maxR, speed, width: 18, life: 0.45, color, damage, hit: false,
+    });
   }
 
   private damageEnemy(e: Enemy, dmg: number, color: string, fromX?: number, fromY?: number, knock = 0): void {
@@ -1594,7 +1678,7 @@ export class Engine {
       hitFlash: 0, kx: 0, ky: 0, orbHitT: -1,
       wobble: Math.random() * TAU,
       shootCd: kind === "warlock" ? 1.2 + Math.random() * 1.6 : 0, // 初撃をばらけさせる
-      abilityCd: 0,
+      abilityCd: 0, windup: 0, windAng: 0,
     };
     w.enemies.push(e);
     w.seen.add(kind);
@@ -1635,7 +1719,7 @@ export class Engine {
     switch (ability) {
       case "swarm": return 3.5;
       case "raise": return 4.0;
-      case "miasma": return 0; // 常時オーラ(クールダウン不要)
+      case "miasma": return 3.0; // 常時オーラは即時、衝波(abilityCd)の初回はこの猶予
       case "wail": return 5.0;
       case "rally": return 3.0;
     }

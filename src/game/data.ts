@@ -589,6 +589,10 @@ export const BOSSES: BossDef[] = [
 
 export const BOSSES_BY_ID: Record<string, BossDef> = Object.fromEntries(BOSSES.map((b) => [b.id, b]));
 
+// ボス能力の予備動作(チャージ)時間。engine が発動前にこの秒数だけ溜め、render が
+// テレグラフ進捗 1 - windup/BOSS_WINDUP を描く(両者の唯一の基準)。
+export const BOSS_WINDUP = 0.7;
+
 // ------------------------------------------------------------
 // ウェーブテーブル(時間秒 → 出現レートと構成)
 // burst を持つ行は、その時刻に到達した瞬間リング状の大量出現を起こす。
