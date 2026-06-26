@@ -1689,22 +1689,37 @@ function drawProjectiles(v: View): void {
         ctx.fill();
         break;
       }
-      case "axe": {
-        ctx.rotate(pr.angle);
-        ctx.fillStyle = "#7a5a3a";
-        ctx.fillRect(-2, -13, 4, 26); // 柄
-        ctx.fillStyle = "#ff8c5a";
+      case "boomerang": {
+        // 飛行方向(楕円の接線方向)を向くよう回転させる。
+        // 位相 angle から接線角: dx/dθ = -boomA*sin(θ), dy/dθ = boomB*cos(θ)
+        const ba = pr.boomA ?? 120;
+        const bb = pr.boomB ?? 200;
+        const tx = -ba * Math.sin(pr.angle);
+        const ty = bb * Math.cos(pr.angle);
+        ctx.rotate(Math.atan2(ty, tx));
+        // 本体: 弓なりの帰刃(ブーメラン型)
+        ctx.globalCompositeOperation = "lighter";
+        const glow = ctx.createRadialGradient(0, 0, 1, 0, 0, pr.radius + 8);
+        glow.addColorStop(0, "rgba(255,220,140,0.6)");
+        glow.addColorStop(1, "rgba(255,180,80,0)");
+        ctx.fillStyle = glow;
         ctx.beginPath();
-        ctx.moveTo(0, -13);
-        ctx.quadraticCurveTo(15, -10, 13, 2);
-        ctx.quadraticCurveTo(7, -3, 0, -3);
+        ctx.arc(0, 0, pr.radius + 8, 0, TAU);
+        ctx.fill();
+        ctx.globalCompositeOperation = "source-over";
+        // 帰刃の翼形(左右対称の三日月)
+        ctx.fillStyle = "#c8903a";
+        ctx.beginPath();
+        ctx.moveTo(pr.radius, 0);
+        ctx.quadraticCurveTo(0, -pr.radius * 0.7, -pr.radius, 0);
+        ctx.quadraticCurveTo(0, pr.radius * 0.35, pr.radius, 0);
         ctx.closePath();
         ctx.fill();
-        ctx.fillStyle = "rgba(255,160,110,0.6)";
+        ctx.fillStyle = "rgba(255,230,160,0.85)";
         ctx.beginPath();
-        ctx.moveTo(0, 13);
-        ctx.quadraticCurveTo(-15, 10, -13, -2);
-        ctx.quadraticCurveTo(-7, 3, 0, 3);
+        ctx.moveTo(pr.radius * 0.7, 0);
+        ctx.quadraticCurveTo(0, -pr.radius * 0.4, -pr.radius * 0.7, 0);
+        ctx.quadraticCurveTo(0, pr.radius * 0.18, pr.radius * 0.7, 0);
         ctx.closePath();
         ctx.fill();
         break;

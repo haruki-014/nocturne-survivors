@@ -77,7 +77,10 @@ import { NO_META_BONUS } from "./types";
 const TAU = Math.PI * 2;
 const MAX_ENEMIES = 300;
 const RALLY_RADIUS = 340; // 灰燼の使者が雑魚を鼓舞(加速)する半径
-const AXE_GRAVITY = 980; // 斧の落下加速度。fireAxe の弧の頂点計算と updateProjectiles の落下で共有(必ず一致)
+// ブーメランの楕円弧パラメータ(area=1 のとき)
+const BOOM_A = 120; // 水平半径(進行方向。プレイヤーから楕円中心までの距離)
+const BOOM_B = 200; // 垂直半径(画面縦方向。B > A で縦に長い楕円)
+const BOOM_SPEED = 3.8; // 角速度 rad/s(一周 ≈ 1.65 s)
 
 // 被弾フィードバック(プレイヤーが接触/呪弾でダメージを受けたときの共通値)
 const PLAYER_HIT_IFRAME = 0.6; // 被弾後の無敵時間(連続ヒットで一気に溶けるのを防ぐ)
@@ -609,7 +612,7 @@ export class Engine {
       switch (def.behavior) {
         case "bolt": this.fireGrimoire(amount, stp, d.might); break;
         case "knife": this.fireKnife(amount, stp, d.might, def.ring === true); break;
-        case "axe": this.fireAxe(amount, stp, d.might, d.area); break;
+        case "boomerang": this.fireBoomerang(amount, stp, d.might, d.area); break;
         case "lightning": this.fireLightning(amount, stp, d.might, d.area); break;
       }
     }
@@ -670,22 +673,34 @@ export class Engine {
     }
   }
 
-  private fireAxe(amount: number, st: { damage: number; duration: number }, might: number, area: number): void {
+  private fireBoomerang(amount: number, st: { damage: number }, might: number, area: number): void {
     const p = this.world.player;
-    // 画面内に収まる弧を描く: 頂点を画面上端のやや内側に置き、横移動も画面幅基準に抑える。
-    // (放物線の頂点高 = vy0^2 / 2g。重力 g は落下側 updateProjectiles と共有の AXE_GRAVITY。)
-    const apexH = Math.max(200, Math.min(this.vh * 0.42, 430)); // 画面上端の手前まで
-    const vy0 = -Math.sqrt(2 * AXE_GRAVITY * apexH);
+    const dir = p.dirX >= 0 ? 1 : -1;
+    const boomA = BOOM_A * area;
+    const boomB = BOOM_B * area;
+    // 複数枚は位相をずらして同時展開
     for (let i = 0; i < amount; i++) {
-      const dir = p.dirX >= 0 ? 1 : -1;
-      const spread = this.vw * (0.08 + Math.random() * 0.05); // 画面幅の 8〜13% 程度の横速度
+      const phaseOffset = (i / amount) * TAU; // 等間隔に位相をずらす
+      // 楕円中心: 自機の水平方向に boomA だけ前方
+      const cx = p.x + boomA * dir;
+      const cy = p.y;
+      // 開始位相 π = 楕円の自機側端点。θ 増加で「前方→下→後方→上→自機」と一周。
+      const startAngle = Math.PI + phaseOffset;
+      // 全一周(2π)で自機に戻る。ライフは角速度から逆算した一周所要時間。
+      const life = TAU / BOOM_SPEED;
       this.world.projectiles.push({
-        kind: "axe", x: p.x, y: p.y - 10,
-        vx: dir * spread * (i % 2 === 0 ? 1 : -0.62),
-        vy: vy0 * (0.92 + Math.random() * 0.12),
-        damage: st.damage * might, radius: 15 * area, pierce: 999,
-        life: st.duration, angle: 0, spin: (9 + Math.random() * 4) * dir,
+        kind: "boomerang",
+        x: p.x + boomA * dir * Math.cos(startAngle - Math.PI), // 開始位置
+        y: p.y + boomB * Math.sin(startAngle - Math.PI),
+        vx: 0, vy: 0, // 位置は angle から毎フレーム再計算するため不使用
+        damage: st.damage * might,
+        radius: 20 * area, // 宝珠(10)の2倍
+        pierce: 999,
+        life,
+        angle: startAngle, // 楕円位相として流用
+        spin: BOOM_SPEED,  // 角速度 rad/s
         hit: new Set(),
+        boomCx: cx, boomCy: cy, boomA, boomB,
       });
     }
   }
@@ -773,23 +788,21 @@ export class Engine {
       const pr = w.projectiles[i];
       if (pr.kind === "orb") continue; // 宝珠は maintainOrbs が管理
       pr.life -= dt;
-      if (pr.kind === "axe") {
-        pr.vy += AXE_GRAVITY * dt; // 落下(fireAxe の頂点計算と同じ重力)
+      if (pr.kind === "boomerang") {
+        // 楕円弧: angle を角速度で進め、楕円中心から位置を再計算する。
+        // 楕円中心は毎フレーム自機の現在位置に追従させる(自機が動いても戻れる)。
+        // 追従は「中心を徐々に自機方向へ引き寄せる」のではなく、
+        // boomCx/boomCy を発射時に固定し、自機の移動にかかわらず元の楕円を一周して完了する。
         pr.angle += pr.spin * dt;
+        pr.x = (pr.boomCx ?? 0) + (pr.boomA ?? 0) * Math.cos(pr.angle);
+        pr.y = (pr.boomCy ?? 0) + (pr.boomB ?? 0) * Math.sin(pr.angle);
+      } else {
+        pr.x += pr.vx * dt;
+        pr.y += pr.vy * dt;
       }
-      pr.x += pr.vx * dt;
-      pr.y += pr.vy * dt;
       if (pr.life <= 0) {
         w.projectiles.splice(i, 1);
         continue;
-      }
-      // 斧は画面外(自機中心の視界外)へ落ちたら消す。画面内だけで戦う。
-      if (pr.kind === "axe") {
-        const p = w.player;
-        if (Math.abs(pr.x - p.x) > this.vw / 2 + 24 || pr.y - p.y > this.vh / 2 + 24) {
-          w.projectiles.splice(i, 1);
-          continue;
-        }
       }
       // 近傍の敵とだけ衝突判定
       let dead = false;
@@ -798,9 +811,9 @@ export class Engine {
         const rr = pr.radius + e.radius;
         if ((e.x - pr.x) ** 2 + (e.y - pr.y) ** 2 < rr * rr) {
           pr.hit.add(e.id);
-          const color = pr.kind === "bolt" ? "#cdbcff" : pr.kind === "knife" ? "#e8edf5" : "#ffb38a";
-          this.damageEnemy(e, pr.damage, color, pr.x, pr.y, pr.kind === "axe" ? 180 : 90);
-          if (pr.kind !== "axe") {
+          const color = pr.kind === "bolt" ? "#cdbcff" : pr.kind === "knife" ? "#e8edf5" : "#e8c87a";
+          this.damageEnemy(e, pr.damage, color, pr.x, pr.y, pr.kind === "boomerang" ? 160 : 90);
+          if (pr.kind !== "boomerang") {
             pr.pierce--;
             if (pr.pierce <= 0) {
               w.projectiles.splice(i, 1);

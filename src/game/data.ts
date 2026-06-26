@@ -131,23 +131,23 @@ export const WEAPONS: Record<string, WeaponDef> = {
       duration: 0,
     }),
   },
-  axe: {
-    id: "axe",
-    name: "戦斧・断罪",
-    icon: "axe",
-    color: "#ff8c5a",
-    desc: "弧を描いて宙を舞い、群れごと薙ぎ払う重い一撃。",
+  boomerang: {
+    id: "boomerang",
+    name: "帰刃・断月",
+    icon: "boomerang",
+    color: "#e8b46a",
+    desc: "縦の楕円弧を描いて飛び、手元に戻る帰投刃。",
     maxLevel: 8,
-    behavior: "axe",
+    behavior: "boomerang",
     school: "steel",
     statsFor: (lv): WeaponStats => ({
       damage: 18 + 6 * (lv - 1),
       cooldown: 1.7 - 0.08 * (lv - 1),
       amount: 1 + fl((lv - 1) / 3), // Lv4:2 Lv7:3
-      area: 1 + 0.05 * (lv - 1),
+      area: 1 + 0.06 * (lv - 1), // 楕円の大きさ倍率
       speed: 1,
       pierce: 999,
-      duration: 2.4,
+      duration: 0, // 使わない(周回速度で自動消滅)
     }),
   },
 
@@ -225,14 +225,14 @@ export const WEAPONS: Record<string, WeaponDef> = {
       speed: 0, pierce: 999, duration: 0,
     }),
   },
-  axe_comet: {
-    id: "axe_comet", name: "彗星・終末斧", icon: "comet_axe", color: "#ff9d63",
-    desc: "引力が斧を加速する。無数の彗星斧が降り注ぐ。",
-    maxLevel: 5, behavior: "axe", school: "steel", evolved: true,
+  boomerang_comet: {
+    id: "boomerang_comet", name: "彗星・帰刃", icon: "comet_axe", color: "#ff9d63",
+    desc: "引力が帰刃を加速する。無数の帰刃が縦横に舞い踊る。",
+    maxLevel: 5, behavior: "boomerang", school: "steel", evolved: true,
     statsFor: (lv): WeaponStats => ({
       damage: 46 + 16 * (lv - 1), cooldown: 1.0 - 0.06 * (lv - 1),
       amount: 4 + (lv - 1), area: 1.6 + 0.1 * (lv - 1),
-      speed: 1, pierce: 999, duration: 2.6,
+      speed: 1, pierce: 999, duration: 0,
     }),
   },
 
@@ -286,7 +286,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   crimson_scythe: {
     id: "crimson_scythe", name: "緋月の戦鎌", icon: "axe", color: "#e0455e",
     desc: "緋き弧を描いて舞う大鎌。返り血が群れを薙ぐ秘伝。",
-    maxLevel: 8, behavior: "axe", school: "blood", signature: true,
+    maxLevel: 8, behavior: "boomerang", school: "blood", signature: true,
     statsFor: (lv): WeaponStats => ({
       damage: 22 + 8 * (lv - 1),
       cooldown: 1.25 - 0.06 * (lv - 1),
@@ -394,7 +394,7 @@ export const EVOLUTIONS: Partial<Record<WeaponId, EvolutionBranch[]>> = {
     { req: "might", evo: "lightning_chain", desc: "怒りが雷を連ねる。落雷の数が爆発的に増す。" },
     { req: "candle", evo: "lightning_storm", desc: "焦点が嵐を生む。極大の落雷が大地を割る。" },
   ],
-  axe: [{ req: "magnet", evo: "axe_comet", desc: "引力が斧を加速する。無数の彗星斧が降り注ぐ。" }],
+  boomerang: [{ req: "magnet", evo: "boomerang_comet", desc: "引力が帰刃を加速する。無数の帰刃が縦横に舞い踊る。" }],
 };
 
 // ------------------------------------------------------------
@@ -664,7 +664,7 @@ export const DEFAULT_MODE: GameMode = "standard";
 const ARCHETYPE: Record<WeaponBehavior, string> = {
   bolt: "誘導弾",
   knife: "貫通刃",
-  axe: "投擲",
+  boomerang: "帰投",
   lightning: "落雷",
   orbs: "周回",
   aura: "設置オーラ",

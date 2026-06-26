@@ -133,6 +133,13 @@ const GLYPHS: Record<string, ReactNode> = {
       <path d="M13 6c2.6-1.2 5.2-.2 5.8 2.6-2.1.5-3.7 2.1-4.2 4.2-2.2-.6-3.3-1.2-3.8-2.8" />
     </>
   ),
+  boomerang: (
+    <>
+      <path d="M5 17c3-5 7-8.5 13-9" strokeLinecap="round" />
+      <path d="M18 8c1.5 2.5 1 5.5-1.5 7" strokeLinecap="round" />
+      <path d="M5 17c-.5-2.5 1-4.5 3-5" strokeLinecap="round" />
+    </>
+  ),
 
   // ── 真化(進化) ──
   grimoire2: (

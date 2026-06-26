@@ -20,7 +20,7 @@ export type WeaponId =
   | "orbs" // 聖鎖の宝珠
   | "censer" // 忌避の薫香
   | "lightning" // 裁きの雷
-  | "axe" // 戦斧・断罪
+  | "boomerang" // 帰刃・断月
   // ---- 真化(進化)形態 ----
   | "grimoire_codex" // 禁書・無限詠唱
   | "grimoire_blasphemy" // 冒涜の聖句
@@ -29,7 +29,7 @@ export type WeaponId =
   | "censer_sanctuary" // 業火の聖域
   | "lightning_chain" // 神鳴・連雷
   | "lightning_storm" // 裁きの嵐
-  | "axe_comet" // 彗星・終末斧
+  | "boomerang_comet" // 彗星・帰刃
   // ---- 専用技(特別なスキンの秘伝。通常プールには出ず、その装いでのみ修得可) ----
   | "void_chain" // 虚無の鎖環 (虚無の影)
   | "gold_verse" // 黄金の聖句 (黄金詠唱者)
@@ -41,7 +41,7 @@ export type WeaponId =
   | "royal_thunder"; // 王権の雷霆 (月の王)
 
 /** 武器の発射挙動。真化形態は基底と同じ挙動を、強化された statsFor で再利用する。 */
-export type WeaponBehavior = "bolt" | "knife" | "axe" | "lightning" | "orbs" | "aura";
+export type WeaponBehavior = "bolt" | "knife" | "boomerang" | "lightning" | "orbs" | "aura";
 
 /** 流派(紋章)。武器とパッシブに付与され、所持数でセットボーナスが灯る。 */
 export type SchoolId = "steel" | "spirit" | "moon" | "blood";
@@ -155,7 +155,7 @@ export interface EnemyShot {
   seed: number; // 描画の揺らぎ用
 }
 
-export type ProjectileKind = "bolt" | "knife" | "axe" | "orb";
+export type ProjectileKind = "bolt" | "knife" | "boomerang" | "orb";
 
 export interface Projectile {
   kind: ProjectileKind;
@@ -167,10 +167,15 @@ export interface Projectile {
   radius: number;
   pierce: number;
   life: number;
-  angle: number;
+  angle: number; // boomerang では楕円位相(ラジアン)として流用
   spin: number;
   hit: Set<number>; // 既にヒットした敵ID(多段ヒット防止)
   orbIndex?: number; // 宝珠の位相インデックス
+  // ── ブーメラン専用 ──
+  boomCx?: number; // 楕円中心 x
+  boomCy?: number; // 楕円中心 y
+  boomA?: number;  // 水平半径(進行方向)
+  boomB?: number;  // 垂直半径(自機側が仰角)
 }
 
 export interface Gem {
