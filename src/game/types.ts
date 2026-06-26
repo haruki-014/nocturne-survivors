@@ -172,10 +172,10 @@ export interface Projectile {
   hit: Set<number>; // 既にヒットした敵ID(多段ヒット防止)
   orbIndex?: number; // 宝珠の位相インデックス
   // ── ブーメラン専用 ──
-  boomCx?: number; // 楕円中心 x
-  boomCy?: number; // 楕円中心 y
-  boomA?: number;  // 水平半径(進行方向)
-  boomB?: number;  // 垂直半径(自機側が仰角)
+  boomOffX?: number; // 楕円中心の自機からの相対オフセット x(中心は毎フレーム自機に追従)
+  boomOffY?: number; // 楕円中心の自機からの相対オフセット y
+  boomA?: number;    // 水平半径(進行方向)
+  boomB?: number;    // 垂直半径(自機側が仰角)
 }
 
 export interface Gem {

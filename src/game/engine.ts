@@ -678,20 +678,21 @@ export class Engine {
     const dir = p.dirX >= 0 ? 1 : -1;
     const boomA = BOOM_A * area;
     const boomB = BOOM_B * area;
+    // 楕円中心の自機からの相対オフセット(中心は updateProjectiles で毎フレーム自機に追従)。
+    // 自機の水平方向に boomA だけ前方。自機側端点(位相π)が常に現在の自機位置に重なる。
+    const offX = boomA * dir;
+    const offY = 0;
     // 複数枚は位相をずらして同時展開
     for (let i = 0; i < amount; i++) {
       const phaseOffset = (i / amount) * TAU; // 等間隔に位相をずらす
-      // 楕円中心: 自機の水平方向に boomA だけ前方
-      const cx = p.x + boomA * dir;
-      const cy = p.y;
       // 開始位相 π = 楕円の自機側端点。θ 増加で「前方→下→後方→上→自機」と一周。
       const startAngle = Math.PI + phaseOffset;
       // 全一周(2π)で自機に戻る。ライフは角速度から逆算した一周所要時間。
       const life = TAU / BOOM_SPEED;
       this.world.projectiles.push({
         kind: "boomerang",
-        x: p.x + boomA * dir * Math.cos(startAngle - Math.PI), // 開始位置
-        y: p.y + boomB * Math.sin(startAngle - Math.PI),
+        x: p.x + offX + boomA * Math.cos(startAngle), // 開始位置(初回 update で再計算される)
+        y: p.y + offY + boomB * Math.sin(startAngle),
         vx: 0, vy: 0, // 位置は angle から毎フレーム再計算するため不使用
         damage: st.damage * might,
         radius: 20 * area, // 宝珠(10)の2倍
@@ -700,7 +701,7 @@ export class Engine {
         angle: startAngle, // 楕円位相として流用
         spin: BOOM_SPEED,  // 角速度 rad/s
         hit: new Set(),
-        boomCx: cx, boomCy: cy, boomA, boomB,
+        boomOffX: offX, boomOffY: offY, boomA, boomB,
       });
     }
   }
@@ -790,12 +791,13 @@ export class Engine {
       pr.life -= dt;
       if (pr.kind === "boomerang") {
         // 楕円弧: angle を角速度で進め、楕円中心から位置を再計算する。
-        // 楕円中心は毎フレーム自機の現在位置に追従させる(自機が動いても戻れる)。
-        // 追従は「中心を徐々に自機方向へ引き寄せる」のではなく、
-        // boomCx/boomCy を発射時に固定し、自機の移動にかかわらず元の楕円を一周して完了する。
+        // 楕円中心は毎フレーム自機の現在位置 + 相対オフセットで求める。これにより
+        // 投擲後に自機が動いても楕円ごと追従し、自機側端点(位相2π)へ必ず戻る。
         pr.angle += pr.spin * dt;
-        pr.x = (pr.boomCx ?? 0) + (pr.boomA ?? 0) * Math.cos(pr.angle);
-        pr.y = (pr.boomCy ?? 0) + (pr.boomB ?? 0) * Math.sin(pr.angle);
+        const cx = w.player.x + (pr.boomOffX ?? 0);
+        const cy = w.player.y + (pr.boomOffY ?? 0);
+        pr.x = cx + (pr.boomA ?? 0) * Math.cos(pr.angle);
+        pr.y = cy + (pr.boomB ?? 0) * Math.sin(pr.angle);
       } else {
         pr.x += pr.vx * dt;
         pr.y += pr.vy * dt;
