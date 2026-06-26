@@ -135,9 +135,10 @@ const GLYPHS: Record<string, ReactNode> = {
   ),
   boomerang: (
     <>
-      <path d="M5 17c3-5 7-8.5 13-9" strokeLinecap="round" />
-      <path d="M18 8c1.5 2.5 1 5.5-1.5 7" strokeLinecap="round" />
-      <path d="M5 17c-.5-2.5 1-4.5 3-5" strokeLinecap="round" />
+      {/* 右翼: 右上に弧を描いて戻る曲刃 */}
+      <path d="M12 12C9.5 8.5 10 4.5 13 3.5c3-1 6.5 1 6.5 4.5-1 3-4.5 4.5-7.5 4z" />
+      {/* 左翼: 点対称(左下へ) */}
+      <path d="M12 12c2.5 3.5 2 7.5-1 8.5-3 1-6.5-1-6.5-4.5 1-3 4.5-4.5 7.5-4z" />
     </>
   ),
 

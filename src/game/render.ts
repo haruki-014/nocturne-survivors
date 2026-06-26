@@ -1690,37 +1690,48 @@ function drawProjectiles(v: View): void {
         break;
       }
       case "boomerang": {
-        // 飛行方向(楕円の接線方向)を向くよう回転させる。
-        // 位相 angle から接線角: dx/dθ = -boomA*sin(θ), dy/dθ = boomB*cos(θ)
+        const r = pr.radius;
         const ba = pr.boomA ?? 120;
         const bb = pr.boomB ?? 200;
+        // 接線方向 + 自軸スピン(楕円1周で4自転 = ブーメランのクルクル感)
         const tx = -ba * Math.sin(pr.angle);
         const ty = bb * Math.cos(pr.angle);
-        ctx.rotate(Math.atan2(ty, tx));
-        // 本体: 弓なりの帰刃(ブーメラン型)
+        ctx.rotate(Math.atan2(ty, tx) + pr.angle * 4);
+        // 月光グロー(加算合成・冷たい青白)
         ctx.globalCompositeOperation = "lighter";
-        const glow = ctx.createRadialGradient(0, 0, 1, 0, 0, pr.radius + 8);
-        glow.addColorStop(0, "rgba(255,220,140,0.6)");
-        glow.addColorStop(1, "rgba(255,180,80,0)");
-        ctx.fillStyle = glow;
+        const g = ctx.createRadialGradient(0, 0, 1, 0, 0, r + 12);
+        g.addColorStop(0, "rgba(195,228,255,0.52)");
+        g.addColorStop(0.55, "rgba(150,200,240,0.16)");
+        g.addColorStop(1, "rgba(100,165,220,0)");
+        ctx.fillStyle = g;
         ctx.beginPath();
-        ctx.arc(0, 0, pr.radius + 8, 0, TAU);
+        ctx.arc(0, 0, r + 12, 0, TAU);
         ctx.fill();
         ctx.globalCompositeOperation = "source-over";
-        // 帰刃の翼形(左右対称の三日月)
-        ctx.fillStyle = "#c8903a";
+        // 左右対称の曲刃翼(±1 でミラー)
+        for (const s of [1, -1]) {
+          ctx.save();
+          ctx.scale(s, s);
+          ctx.fillStyle = "#aed0e8";
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.bezierCurveTo(r * 0.22, -r * 0.6, r * 0.72, -r * 0.65, r, 0);
+          ctx.bezierCurveTo(r * 0.72, r * 0.26, r * 0.22, r * 0.26, 0, 0);
+          ctx.closePath();
+          ctx.fill();
+          // 刃の縁光筋(エッジハイライト)
+          ctx.strokeStyle = "rgba(222,246,255,0.72)";
+          ctx.lineWidth = 1.1;
+          ctx.beginPath();
+          ctx.moveTo(r * 0.07, -r * 0.05);
+          ctx.bezierCurveTo(r * 0.32, -r * 0.46, r * 0.68, -r * 0.48, r * 0.9, -r * 0.03);
+          ctx.stroke();
+          ctx.restore();
+        }
+        // 中心鋲
+        ctx.fillStyle = "#d8f0ff";
         ctx.beginPath();
-        ctx.moveTo(pr.radius, 0);
-        ctx.quadraticCurveTo(0, -pr.radius * 0.7, -pr.radius, 0);
-        ctx.quadraticCurveTo(0, pr.radius * 0.35, pr.radius, 0);
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = "rgba(255,230,160,0.85)";
-        ctx.beginPath();
-        ctx.moveTo(pr.radius * 0.7, 0);
-        ctx.quadraticCurveTo(0, -pr.radius * 0.4, -pr.radius * 0.7, 0);
-        ctx.quadraticCurveTo(0, pr.radius * 0.18, pr.radius * 0.7, 0);
-        ctx.closePath();
+        ctx.arc(0, 0, r * 0.22, 0, TAU);
         ctx.fill();
         break;
       }
