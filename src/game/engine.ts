@@ -64,6 +64,7 @@ import type {
   PassiveDef,
   PassiveId,
   Projectile,
+  ProjectileFx,
   RunStats,
   Renderer,
   SchoolId,
@@ -74,6 +75,9 @@ import type {
   World,
 } from "./types";
 import { NO_META_BONUS } from "./types";
+
+/** 固有技の投射物に宿す視覚(色＋エフェクト)。fx を持つ武器のみ生成して fire 関数へ渡す。 */
+type WeaponVis = { color: string; fx: ProjectileFx };
 
 const TAU = Math.PI * 2;
 const MAX_ENEMIES = 300;
@@ -602,14 +606,19 @@ export class Engine {
     const w = this.world;
     const d = w.derived;
     w.auraR = 0;
+    // 装いの専用技(秘伝)を所持中か。所持していれば自機の統一グローを秘伝色に染める
+    w.sigWield = !!this.signatureWeapon && w.weapons.some((o) => o.id === this.signatureWeapon);
+    if (w.sigWield && this.signatureWeapon) w.sigColor = WEAPONS[this.signatureWeapon].color;
 
     for (const ow of w.weapons) {
       const def = WEAPONS[ow.id];
       const st = def.statsFor(ow.level);
       const amount = st.amount + (def.behavior === "aura" ? 0 : d.amountBonus);
+      // 固有技(秘伝)の視覚: fx を持つ武器だけ色とエフェクトを投射物へ宿す(基底は従来の見た目)
+      const vis: WeaponVis | undefined = def.fx ? { color: def.color, fx: def.fx } : undefined;
 
       if (def.behavior === "orbs") {
-        this.maintainOrbs(ow, amount, st.damage * d.might, st.area * d.area, st.speed, st.cooldown, dt);
+        this.maintainOrbs(ow, amount, st.damage * d.might, st.area * d.area, st.speed, st.cooldown, vis, dt);
         continue;
       }
       if (def.behavior === "aura") {
@@ -630,10 +639,10 @@ export class Engine {
       const stp = { ...st, pierce: st.pierce < 900 ? st.pierce + d.pierceBonus : st.pierce };
 
       switch (def.behavior) {
-        case "bolt": this.fireGrimoire(amount, stp, d.might); break;
-        case "knife": this.fireKnife(amount, stp, d.might, def.ring === true); break;
-        case "boomerang": this.fireBoomerang(amount, stp, d.might, d.area); break;
-        case "lightning": this.fireLightning(amount, stp, d.might, d.area); break;
+        case "bolt": this.fireGrimoire(amount, stp, d.might, vis); break;
+        case "knife": this.fireKnife(amount, stp, d.might, def.ring === true, vis); break;
+        case "boomerang": this.fireBoomerang(amount, stp, d.might, d.area, vis); break;
+        case "lightning": this.fireLightning(amount, stp, d.might, d.area, vis); break;
       }
     }
   }
@@ -647,7 +656,7 @@ export class Engine {
     return within.slice(0, n).map((o) => o.e);
   }
 
-  private fireGrimoire(amount: number, st: { damage: number; speed: number; pierce: number; duration: number }, might: number): void {
+  private fireGrimoire(amount: number, st: { damage: number; speed: number; pierce: number; duration: number }, might: number, vis?: WeaponVis): void {
     const p = this.world.player;
     const targets = this.nearestEnemies(amount, BOLT_AIM_RANGE);
     for (let i = 0; i < amount; i++) {
@@ -660,11 +669,12 @@ export class Engine {
         vx: Math.cos(ang) * st.speed, vy: Math.sin(ang) * st.speed,
         damage: st.damage * might, radius: BOLT_RADIUS, pierce: st.pierce,
         life: st.duration, angle: ang, spin: 0, hit: new Set(),
+        color: vis?.color, fx: vis?.fx,
       });
     }
   }
 
-  private fireKnife(amount: number, st: { damage: number; speed: number; pierce: number; duration: number }, might: number, ring = false): void {
+  private fireKnife(amount: number, st: { damage: number; speed: number; pierce: number; duration: number }, might: number, ring = false, vis?: WeaponVis): void {
     const p = this.world.player;
     // 通常: 最も近い骸へ狙いを定める(銀のナイフの強み=確実に当たる前方斉射)。
     // 敵がいなければ進行方向へ。ring(真化): 全方位へ等間隔。
@@ -689,11 +699,12 @@ export class Engine {
         vx: Math.cos(ang) * st.speed, vy: Math.sin(ang) * st.speed,
         damage: st.damage * might, radius: KNIFE_RADIUS, pierce: st.pierce,
         life: st.duration, angle: ang, spin: 0, hit: new Set(),
+        color: vis?.color, fx: vis?.fx,
       });
     }
   }
 
-  private fireBoomerang(amount: number, st: { damage: number }, might: number, area: number): void {
+  private fireBoomerang(amount: number, st: { damage: number }, might: number, area: number, vis?: WeaponVis): void {
     const p = this.world.player;
     const boomA = BOOM_A * area;
     const boomB = BOOM_B * area;
@@ -716,11 +727,12 @@ export class Engine {
         spin: BOOM_SPEED,  // 角速度 rad/s
         hit: new Set(),
         boomDir, boomA, boomB,
+        color: vis?.color, fx: vis?.fx,
       });
     }
   }
 
-  private fireLightning(amount: number, st: { damage: number; area: number }, might: number, areaMul: number): void {
+  private fireLightning(amount: number, st: { damage: number; area: number }, might: number, areaMul: number, vis?: WeaponVis): void {
     const w = this.world;
     const p = w.player;
     // 画面内(自機中心の視界内)の敵だけを標的にする。視界外への落雷はしない。
@@ -728,23 +740,24 @@ export class Engine {
     const halfH = this.vh / 2;
     const candidates = w.enemies.filter((e) => Math.abs(e.x - p.x) <= halfW && Math.abs(e.y - p.y) <= halfH);
     if (candidates.length === 0) return;
+    const col = vis?.color ?? "#ffd95e"; // 固有技なら主色(氷牙=氷青, 王権=紫紺)
     for (let i = 0; i < amount; i++) {
       const tgt = candidates[Math.floor(Math.random() * candidates.length)];
       // 着弾の AoE 半径。威力は据え置き(高威力は直感的)で、範囲を絞って一掃力を抑える。
       const r = LIGHTNING_AOE * st.area * areaMul;
-      w.bolts.push({ x: tgt.x, y: tgt.y, life: 0.28, seed: Math.random() * 100 });
+      w.bolts.push({ x: tgt.x, y: tgt.y, life: 0.28, seed: Math.random() * 100, color: vis?.color, fx: vis?.fx });
       for (const e of w.enemies) {
         if ((e.x - tgt.x) ** 2 + (e.y - tgt.y) ** 2 < r * r) {
-          this.damageEnemy(e, st.damage * might, "#ffd95e");
+          this.damageEnemy(e, st.damage * might, col);
         }
       }
-      this.burst(tgt.x, tgt.y, 8, "#ffd95e", 2.4);
+      this.burst(tgt.x, tgt.y, 8, col, 2.4);
       w.shake = Math.min(1, w.shake + 0.12);
     }
   }
 
   /** 周回する宝珠を amount 個に保ち、位置を更新する(rehit = 同一敵への再ヒット間隔/秒) */
-  private maintainOrbs(ow: OwnedWeapon, amount: number, damage: number, areaMul: number, angVel: number, rehit: number, dt: number): void {
+  private maintainOrbs(ow: OwnedWeapon, amount: number, damage: number, areaMul: number, angVel: number, rehit: number, vis: WeaponVis | undefined, dt: number): void {
     const w = this.world;
     const orbs = w.projectiles.filter((p) => p.kind === "orb");
     while (orbs.length < amount) {
@@ -752,6 +765,7 @@ export class Engine {
         kind: "orb", x: w.player.x, y: w.player.y, vx: 0, vy: 0,
         damage, radius: ORB_RADIUS, pierce: 999, life: Infinity,
         angle: 0, spin: 0, hit: new Set(), orbIndex: orbs.length,
+        color: vis?.color, fx: vis?.fx,
       };
       orbs.push(o);
       w.projectiles.push(o);
@@ -776,7 +790,7 @@ export class Engine {
         const rr = o.radius + e.radius;
         if ((e.x - o.x) ** 2 + (e.y - o.y) ** 2 < rr * rr) {
           e.orbHitT = w.t;
-          this.damageEnemy(e, o.damage, "#6fd3ff", o.x, o.y, 130);
+          this.damageEnemy(e, o.damage, vis?.color ?? "#6fd3ff", o.x, o.y, 130);
           break;
         }
       }

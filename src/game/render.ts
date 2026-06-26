@@ -1742,6 +1742,31 @@ function drawPlayer(v: View): void {
   const spr = playerSprite(skin);
   const bob = p.moving ? Math.abs(Math.sin(p.anim * 11)) * 3 : Math.sin(world.t * 2.4) * 1.2;
   const flip = p.dirX < 0 ? -1 : 1;
+  // 秘伝の担い手: 装いの専用技を所持中なら、足元に主色の脈打つ光環を敷く(特別感)
+  if (world.sigWield) {
+    const sc = world.sigColor;
+    const pulse = 0.5 + 0.5 * Math.sin(world.t * 3);
+    const rr = 26 + pulse * 4;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    const halo = ctx.createRadialGradient(wx(p.x), wy(p.y) + 6, 2, wx(p.x), wy(p.y) + 6, rr);
+    halo.addColorStop(0, withAlpha(sc, 0.22 + 0.12 * pulse));
+    halo.addColorStop(1, withAlpha(sc, 0));
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.ellipse(wx(p.x), wy(p.y) + 8, rr, rr * 0.5, 0, 0, TAU);
+    ctx.fill();
+    // 主色の薄い輪(秘伝の刻印)
+    ctx.strokeStyle = withAlpha(sc, 0.3 + 0.2 * pulse);
+    ctx.lineWidth = 1.4;
+    ctx.setLineDash([5, 7]);
+    ctx.lineDashOffset = -world.t * 16;
+    ctx.beginPath();
+    ctx.ellipse(wx(p.x), wy(p.y) + 8, rr * 0.78, rr * 0.4, 0, 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
   // 影
   ctx.fillStyle = "rgba(0,0,0,0.45)";
   ctx.beginPath();
@@ -1775,23 +1800,36 @@ function drawProjectiles(v: View): void {
       case "bolt": {
         ctx.rotate(pr.angle);
         ctx.globalCompositeOperation = "lighter";
+        // 固有技(黄金の聖句)は主色で、基底は紫の魔弾で灯す
+        const core = pr.color ? shade(pr.color, 0.7) : "#efe7ff";
+        const mid = pr.color ?? "#9d7bff";
         const g = ctx.createRadialGradient(0, 0, 1, 0, 0, 13);
-        g.addColorStop(0, "#efe7ff");
-        g.addColorStop(0.4, "#9d7bff");
-        g.addColorStop(1, "rgba(157,123,255,0)");
+        g.addColorStop(0, core);
+        g.addColorStop(0.4, mid);
+        g.addColorStop(1, withAlpha(mid, 0));
         ctx.fillStyle = g;
         ctx.beginPath();
         ctx.arc(0, 0, 13, 0, TAU);
         ctx.fill();
-        ctx.fillStyle = "rgba(205,188,255,0.9)";
+        ctx.fillStyle = pr.color ? withAlpha(shade(pr.color, 0.5), 0.9) : "rgba(205,188,255,0.9)";
         ctx.beginPath();
         ctx.ellipse(-7, 0, 11, 3, 0, 0, TAU); // 尾
         ctx.fill();
+        if (pr.fx === "gold") {
+          // 聖句の四芒グリフ
+          ctx.strokeStyle = withAlpha(shade(pr.color ?? "#ffd66a", 0.6), 0.85);
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.moveTo(-9, 0); ctx.lineTo(9, 0);
+          ctx.moveTo(0, -7); ctx.lineTo(0, 7);
+          ctx.stroke();
+        }
         break;
       }
       case "knife": {
         ctx.rotate(pr.angle);
-        ctx.fillStyle = "#cfd8e6";
+        const blade = pr.color ?? "#cfd8e6";
+        ctx.fillStyle = blade;
         ctx.beginPath();
         ctx.moveTo(9, 0);
         ctx.lineTo(-5, -2.6);
@@ -1799,13 +1837,27 @@ function drawProjectiles(v: View): void {
         ctx.lineTo(-5, 2.6);
         ctx.closePath();
         ctx.fill();
-        ctx.fillStyle = "#6b5a8c";
+        ctx.fillStyle = pr.color ? shade(pr.color, -0.45) : "#6b5a8c";
         ctx.fillRect(-9, -1.4, 4, 2.8);
         ctx.globalCompositeOperation = "lighter"; // 刃の煌めき
-        ctx.fillStyle = "rgba(220,230,255,0.5)";
+        ctx.fillStyle = pr.color ? withAlpha(shade(pr.color, 0.6), 0.6) : "rgba(220,230,255,0.5)";
         ctx.beginPath();
         ctx.arc(4, 0, 3, 0, TAU);
         ctx.fill();
+        if (pr.fx === "void") {
+          // 虚無の鎖環: 刃を囲む紫の小ルーン環
+          ctx.strokeStyle = withAlpha(pr.color ?? "#b078ff", 0.6);
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.arc(0, 0, 7, 0, TAU);
+          ctx.stroke();
+        } else if (pr.fx === "plague") {
+          // 疫癘: 刃尾に滴る毒の雫
+          ctx.fillStyle = withAlpha(pr.color ?? "#b6d27a", 0.7);
+          ctx.beginPath();
+          ctx.arc(-7, 0, 2.4, 0, TAU);
+          ctx.fill();
+        }
         break;
       }
       case "boomerang": {
@@ -1816,12 +1868,14 @@ function drawProjectiles(v: View): void {
         const tx = -ba * Math.sin(pr.angle);
         const ty = bb * Math.cos(pr.angle);
         ctx.rotate(Math.atan2(ty, tx) + (pr.boomDir ?? 0) + pr.angle * 4);
-        // 月光グロー(加算合成・冷たい青白)
+        // グロー(基底は冷たい月光、固有技=緋月の戦鎌は主色)
+        const wing = pr.color ?? "#aed0e8";
+        const glow = pr.color ?? "#9bc8e4";
         ctx.globalCompositeOperation = "lighter";
         const g = ctx.createRadialGradient(0, 0, 1, 0, 0, r + 12);
-        g.addColorStop(0, "rgba(195,228,255,0.52)");
-        g.addColorStop(0.55, "rgba(150,200,240,0.16)");
-        g.addColorStop(1, "rgba(100,165,220,0)");
+        g.addColorStop(0, withAlpha(shade(glow, 0.5), 0.52));
+        g.addColorStop(0.55, withAlpha(glow, 0.16));
+        g.addColorStop(1, withAlpha(glow, 0));
         ctx.fillStyle = g;
         ctx.beginPath();
         ctx.arc(0, 0, r + 12, 0, TAU);
@@ -1831,7 +1885,7 @@ function drawProjectiles(v: View): void {
         for (const s of [1, -1]) {
           ctx.save();
           ctx.scale(s, s);
-          ctx.fillStyle = "#aed0e8";
+          ctx.fillStyle = wing;
           ctx.beginPath();
           ctx.moveTo(0, 0);
           ctx.bezierCurveTo(r * 0.22, -r * 0.6, r * 0.72, -r * 0.65, r, 0);
@@ -1839,7 +1893,7 @@ function drawProjectiles(v: View): void {
           ctx.closePath();
           ctx.fill();
           // 刃の縁光筋(エッジハイライト)
-          ctx.strokeStyle = "rgba(222,246,255,0.72)";
+          ctx.strokeStyle = withAlpha(shade(wing, 0.6), 0.72);
           ctx.lineWidth = 1.1;
           ctx.beginPath();
           ctx.moveTo(r * 0.07, -r * 0.05);
@@ -1848,7 +1902,7 @@ function drawProjectiles(v: View): void {
           ctx.restore();
         }
         // 中心鋲
-        ctx.fillStyle = "#d8f0ff";
+        ctx.fillStyle = shade(wing, 0.5);
         ctx.beginPath();
         ctx.arc(0, 0, r * 0.22, 0, TAU);
         ctx.fill();
@@ -1856,14 +1910,28 @@ function drawProjectiles(v: View): void {
       }
       case "orb": {
         ctx.globalCompositeOperation = "lighter";
+        // 基底は聖鎖の宝珠(青)、固有技=業火の輪舞は主色(焔)
+        const mid = pr.color ?? "#6fd3ff";
+        const core = pr.color ? shade(pr.color, 0.65) : "#eafaff";
         const g = ctx.createRadialGradient(0, 0, 1, 0, 0, pr.radius + 6);
-        g.addColorStop(0, "#eafaff");
-        g.addColorStop(0.45, "#6fd3ff");
-        g.addColorStop(1, "rgba(111,211,255,0)");
+        g.addColorStop(0, core);
+        g.addColorStop(0.45, mid);
+        g.addColorStop(1, withAlpha(mid, 0));
         ctx.fillStyle = g;
         ctx.beginPath();
         ctx.arc(0, 0, pr.radius + 6, 0, TAU);
         ctx.fill();
+        if (pr.fx === "ember") {
+          // 焔の舌(主色で外周に揺らめく)
+          ctx.fillStyle = withAlpha(shade(mid, 0.3), 0.5);
+          for (let k = 0; k < 3; k++) {
+            const a = world.t * 6 + (k / 3) * TAU + pr.x * 0.05;
+            const er = pr.radius + 4;
+            ctx.beginPath();
+            ctx.arc(Math.cos(a) * er, Math.sin(a) * er, 2.4, 0, TAU);
+            ctx.fill();
+          }
+        }
         break;
       }
     }
@@ -1871,10 +1939,10 @@ function drawProjectiles(v: View): void {
   }
   ctx.globalCompositeOperation = "source-over";
 
-  // 宝珠の鎖(プレイヤーと結ぶ薄い線)
+  // 宝珠の鎖(プレイヤーと結ぶ薄い線。固有技なら主色)
   for (const pr of world.projectiles) {
     if (pr.kind !== "orb") continue;
-    ctx.strokeStyle = "rgba(111,211,255,0.16)";
+    ctx.strokeStyle = withAlpha(pr.color ?? "#6fd3ff", 0.16);
     ctx.lineWidth = 1.4;
     ctx.beginPath();
     ctx.moveTo(wx(p.x), wy(p.y));
@@ -1924,6 +1992,9 @@ function drawBolts(v: View): void {
     const bx = wx(b.x);
     const by = wy(b.y);
     const alpha = Math.min(1, b.life * 5);
+    // 雷色(基底=黄白の裁き、固有技=氷牙の氷青/王権の紫紺)。芯は主色を白寄りに。
+    const glow = b.color ?? "#ffd95e";
+    const core = b.color ? shade(b.color, 0.65) : "#fff7d6";
     // 落雷の柱
     const pts: Array<[number, number]> = [[bx + Math.sin(b.seed) * 40, by - 320]];
     for (let i = 1; i <= 6; i++) {
@@ -1931,14 +2002,14 @@ function drawBolts(v: View): void {
       pts.push([bx + (1 - t) * Math.sin(b.seed + i * 7.3) * 34, by - 320 + 320 * t]);
     }
     // 外側のグロー
-    ctx.strokeStyle = `rgba(255,217,94,${alpha * 0.4})`;
+    ctx.strokeStyle = withAlpha(glow, alpha * 0.4);
     ctx.lineWidth = 7;
     ctx.beginPath();
     ctx.moveTo(pts[0][0], pts[0][1]);
     for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
     ctx.stroke();
     // 芯
-    ctx.strokeStyle = `rgba(255,247,214,${alpha})`;
+    ctx.strokeStyle = withAlpha(core, alpha);
     ctx.lineWidth = 2.4;
     ctx.beginPath();
     ctx.moveTo(pts[0][0], pts[0][1]);
@@ -1946,12 +2017,23 @@ function drawBolts(v: View): void {
     ctx.stroke();
     // 着弾の閃光
     const fg = ctx.createRadialGradient(bx, by, 1, bx, by, 22 * (1 - b.life) + 8);
-    fg.addColorStop(0, `rgba(255,247,214,${alpha * 0.9})`);
-    fg.addColorStop(1, "rgba(255,217,94,0)");
+    fg.addColorStop(0, withAlpha(core, alpha * 0.9));
+    fg.addColorStop(1, withAlpha(glow, 0));
     ctx.fillStyle = fg;
     ctx.beginPath();
     ctx.arc(bx, by, 22 * (1 - b.life) + 8, 0, TAU);
     ctx.fill();
+    if (b.fx === "frost") {
+      // 氷牙: 着弾点に氷片(主色の小三角)
+      ctx.fillStyle = withAlpha(core, alpha);
+      for (let k = 0; k < 4; k++) {
+        const a = (k / 4) * TAU + b.seed;
+        const er = (22 * (1 - b.life) + 8) * 0.7;
+        ctx.beginPath();
+        ctx.arc(bx + Math.cos(a) * er, by + Math.sin(a) * er, 2, 0, TAU);
+        ctx.fill();
+      }
+    }
   }
   ctx.globalCompositeOperation = "source-over";
 }

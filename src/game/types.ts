@@ -78,6 +78,7 @@ export interface WeaponDef {
   evolved?: boolean; // 真化形態か
   signature?: boolean; // 専用技(特別なスキンの秘伝)。通常プールには出さない。
   ring?: boolean; // knife挙動を全方位リングにする(千刃・烈風)
+  fx?: ProjectileFx; // 投射物の専用エフェクト(固有技の特別感。未指定なら基底の見た目)
   statsFor: (lv: number) => WeaponStats;
 }
 
@@ -176,6 +177,9 @@ export interface EnemyShot {
 
 export type ProjectileKind = "bolt" | "knife" | "boomerang" | "orb";
 
+/** 固有技(秘伝)の投射物に宿す専用エフェクト。基底武器は未指定で従来の見た目。 */
+export type ProjectileFx = "frost" | "ember" | "void" | "gold" | "plague" | "crimson" | "royal";
+
 export interface Projectile {
   kind: ProjectileKind;
   x: number;
@@ -190,6 +194,8 @@ export interface Projectile {
   spin: number;
   hit: Set<number>; // 既にヒットした敵ID(多段ヒット防止)
   orbIndex?: number; // 宝珠の位相インデックス
+  color?: string; // 固有技の主色(未指定なら kind 既定色で描く)
+  fx?: ProjectileFx; // 固有技の専用エフェクト
   // ── ブーメラン専用 ──
   boomDir?: number; // 投擲方向(ラジアン)。個数で放射状に均等配分。楕円ごとこの向きへ回転
   boomA?: number;   // 進行方向の半径(短軸)
@@ -241,6 +247,8 @@ export interface Bolt {
   y: number;
   life: number;
   seed: number;
+  color?: string; // 固有技の雷の主色(未指定なら既定の黄白)
+  fx?: ProjectileFx; // 固有技の専用エフェクト(frost=氷, royal=紫紺 等)
 }
 
 export interface Player {

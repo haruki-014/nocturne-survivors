@@ -241,7 +241,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   void_chain: {
     id: "void_chain", name: "虚無の鎖環", icon: "knives_ring", color: "#b078ff",
     desc: "虚空より呼ぶ刃の環。全方位を断ち、深く貫く秘伝。",
-    maxLevel: 8, behavior: "knife", school: "blood", signature: true, ring: true,
+    maxLevel: 8, behavior: "knife", school: "blood", signature: true, ring: true, fx: "void",
     statsFor: (lv): WeaponStats => ({
       damage: 14 + 6 * (lv - 1),
       cooldown: 1.5 - 0.08 * (lv - 1),
@@ -256,7 +256,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   gold_verse: {
     id: "gold_verse", name: "黄金の聖句", icon: "grimoire3", color: "#ffd66a",
     desc: "黄金の一節が複数の敵を撃つ。詠唱者の秘伝。",
-    maxLevel: 8, behavior: "bolt", school: "moon", signature: true,
+    maxLevel: 8, behavior: "bolt", school: "moon", signature: true, fx: "gold",
     statsFor: (lv): WeaponStats => ({
       damage: 13 + 5 * (lv - 1),
       cooldown: 0.9 - 0.045 * (lv - 1),
@@ -271,7 +271,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   frost_lance: {
     id: "frost_lance", name: "氷牙の連弾", icon: "bolts2", color: "#8fe6ff",
     desc: "凍てつく雷が連なって落ちる。狩人の秘伝。",
-    maxLevel: 8, behavior: "lightning", school: "spirit", signature: true,
+    maxLevel: 8, behavior: "lightning", school: "spirit", signature: true, fx: "frost",
     statsFor: (lv): WeaponStats => ({
       damage: 22 + 9 * (lv - 1),
       cooldown: 1.5 - 0.08 * (lv - 1),
@@ -286,7 +286,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   crimson_scythe: {
     id: "crimson_scythe", name: "緋月の戦鎌", icon: "axe", color: "#e0455e",
     desc: "緋き弧を描いて舞う大鎌。返り血が群れを薙ぐ秘伝。",
-    maxLevel: 8, behavior: "boomerang", school: "blood", signature: true,
+    maxLevel: 8, behavior: "boomerang", school: "blood", signature: true, fx: "crimson",
     statsFor: (lv): WeaponStats => ({
       damage: 22 + 8 * (lv - 1),
       cooldown: 1.25 - 0.06 * (lv - 1),
@@ -312,7 +312,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   ember_waltz: {
     id: "ember_waltz", name: "業火の輪舞", icon: "halo", color: "#ff7a3c",
     desc: "身を巡る焔の珠が、近づく者を焼べて踊る秘伝。",
-    maxLevel: 8, behavior: "orbs", school: "moon", signature: true,
+    maxLevel: 8, behavior: "orbs", school: "moon", signature: true, fx: "ember",
     statsFor: (lv): WeaponStats => ({
       damage: 11 + 4 * (lv - 1),
       cooldown: 0.5, // 同一敵への再ヒット間隔
@@ -326,7 +326,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   plague_fan: {
     id: "plague_fan", name: "疫癘の散弾", icon: "knife", color: "#b6d27a",
     desc: "扇状に撒かれる毒の刃。逃げ道を腐らせる秘伝。",
-    maxLevel: 8, behavior: "knife", school: "spirit", signature: true,
+    maxLevel: 8, behavior: "knife", school: "spirit", signature: true, fx: "plague",
     statsFor: (lv): WeaponStats => ({
       damage: 11 + 5 * (lv - 1),
       cooldown: 0.8 - 0.045 * (lv - 1),
@@ -341,7 +341,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   royal_thunder: {
     id: "royal_thunder", name: "王権の雷霆", icon: "storm", color: "#c8a8ff",
     desc: "玉座の威光が雷霆となり、夜を裂いて落ちる秘伝。",
-    maxLevel: 8, behavior: "lightning", school: "moon", signature: true,
+    maxLevel: 8, behavior: "lightning", school: "moon", signature: true, fx: "royal",
     statsFor: (lv): WeaponStats => ({
       damage: 26 + 10 * (lv - 1),
       cooldown: 1.6 - 0.09 * (lv - 1),
