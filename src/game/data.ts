@@ -85,7 +85,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     school: "spirit",
     statsFor: (lv): WeaponStats => ({
       damage: 9 + 4 * (lv - 1),
-      cooldown: 0.5, // 同一敵への再ヒット間隔
+      cooldown: 0.55 - 0.02 * (lv - 1), // 同一敵への再ヒット間隔 Lv1:0.55 → Lv8:0.41(投資で短縮)
       amount: 1 + fl(lv / 2), // Lv8:5個
       area: 1 + 0.07 * (lv - 1), // 周回半径
       speed: 2.3 + 0.08 * (lv - 1), // 角速度 rad/s

@@ -77,6 +77,21 @@ import { NO_META_BONUS } from "./types";
 const TAU = Math.PI * 2;
 const MAX_ENEMIES = 300;
 const RALLY_RADIUS = 340; // 灰燼の使者が雑魚を鼓舞(加速)する半径
+// ── 武器の質感(挙動)パラメータ ──
+// 数値バランス(威力/間隔/個数/範囲倍率)は data.ts の statsFor が司る。
+// ここは「当たり判定の太さ・狙いの届く距離・周回半径」など、レベルに依らない手触り。
+// 魔弾(誘導弾)
+const BOLT_RADIUS = 8; // 魔弾の当たり判定
+const BOLT_AIM_RANGE = 760; // 自動で狙う最大距離(これより遠い敵は撃たない)
+// 銀のナイフ(前方斉射)
+const KNIFE_RADIUS = 7; // ナイフの当たり判定
+const KNIFE_SPREAD = 0.09; // 斉射1枚あたりの開き角(rad)
+const KNIFE_FAN_GAP = 7; // 斉射の横ずれ(px/枚)
+// 聖鎖の宝珠(周回)
+const ORB_RADIUS = 10; // 宝珠の当たり判定
+const ORB_ORBIT = 78; // 周回半径(area=1 のとき)
+// 裁きの雷(着弾AoE)
+const LIGHTNING_AOE = 36; // 着弾 AoE 半径の基準(area=1 のとき)
 // ブーメランの楕円弧パラメータ(area=1 のとき)
 const BOOM_A = 92; // 進行方向の半径(短軸。中心はここだけ前方/遠点は 2*A)
 const BOOM_B = 132; // 進行方向に直交する半径(長軸。B > A で投擲方向に細長い弧)
@@ -590,7 +605,7 @@ export class Engine {
       const amount = st.amount + (def.behavior === "aura" ? 0 : d.amountBonus);
 
       if (def.behavior === "orbs") {
-        this.maintainOrbs(ow, amount, st.damage * d.might, st.area * d.area, st.speed, dt);
+        this.maintainOrbs(ow, amount, st.damage * d.might, st.area * d.area, st.speed, st.cooldown, dt);
         continue;
       }
       if (def.behavior === "aura") {
@@ -630,7 +645,7 @@ export class Engine {
 
   private fireGrimoire(amount: number, st: { damage: number; speed: number; pierce: number; duration: number }, might: number): void {
     const p = this.world.player;
-    const targets = this.nearestEnemies(amount, 760);
+    const targets = this.nearestEnemies(amount, BOLT_AIM_RANGE);
     for (let i = 0; i < amount; i++) {
       const tgt = targets[i % Math.max(1, targets.length)];
       let ang: number;
@@ -639,7 +654,7 @@ export class Engine {
       this.world.projectiles.push({
         kind: "bolt", x: p.x, y: p.y,
         vx: Math.cos(ang) * st.speed, vy: Math.sin(ang) * st.speed,
-        damage: st.damage * might, radius: 8, pierce: st.pierce,
+        damage: st.damage * might, radius: BOLT_RADIUS, pierce: st.pierce,
         life: st.duration, angle: ang, spin: 0, hit: new Set(),
       });
     }
@@ -661,14 +676,14 @@ export class Engine {
       }
     }
     for (let i = 0; i < amount; i++) {
-      const ang = ring ? base + (i / amount) * TAU : base + (i - (amount - 1) / 2) * 0.09;
-      const side = ring ? 0 : (i - (amount - 1) / 2) * 7;
+      const ang = ring ? base + (i / amount) * TAU : base + (i - (amount - 1) / 2) * KNIFE_SPREAD;
+      const side = ring ? 0 : (i - (amount - 1) / 2) * KNIFE_FAN_GAP;
       this.world.projectiles.push({
         kind: "knife",
         x: p.x + Math.cos(ang + Math.PI / 2) * side,
         y: p.y + Math.sin(ang + Math.PI / 2) * side,
         vx: Math.cos(ang) * st.speed, vy: Math.sin(ang) * st.speed,
-        damage: st.damage * might, radius: 7, pierce: st.pierce,
+        damage: st.damage * might, radius: KNIFE_RADIUS, pierce: st.pierce,
         life: st.duration, angle: ang, spin: 0, hit: new Set(),
       });
     }
@@ -712,7 +727,7 @@ export class Engine {
     for (let i = 0; i < amount; i++) {
       const tgt = candidates[Math.floor(Math.random() * candidates.length)];
       // 着弾の AoE 半径。威力は据え置き(高威力は直感的)で、範囲を絞って一掃力を抑える。
-      const r = 36 * st.area * areaMul;
+      const r = LIGHTNING_AOE * st.area * areaMul;
       w.bolts.push({ x: tgt.x, y: tgt.y, life: 0.28, seed: Math.random() * 100 });
       for (const e of w.enemies) {
         if ((e.x - tgt.x) ** 2 + (e.y - tgt.y) ** 2 < r * r) {
@@ -724,14 +739,14 @@ export class Engine {
     }
   }
 
-  /** 周回する宝珠を amount 個に保ち、位置を更新する */
-  private maintainOrbs(ow: OwnedWeapon, amount: number, damage: number, areaMul: number, angVel: number, dt: number): void {
+  /** 周回する宝珠を amount 個に保ち、位置を更新する(rehit = 同一敵への再ヒット間隔/秒) */
+  private maintainOrbs(ow: OwnedWeapon, amount: number, damage: number, areaMul: number, angVel: number, rehit: number, dt: number): void {
     const w = this.world;
     const orbs = w.projectiles.filter((p) => p.kind === "orb");
     while (orbs.length < amount) {
       const o: Projectile = {
         kind: "orb", x: w.player.x, y: w.player.y, vx: 0, vy: 0,
-        damage, radius: 10, pierce: 999, life: Infinity,
+        damage, radius: ORB_RADIUS, pierce: 999, life: Infinity,
         angle: 0, spin: 0, hit: new Set(), orbIndex: orbs.length,
       };
       orbs.push(o);
@@ -742,7 +757,7 @@ export class Engine {
       const idx = w.projectiles.indexOf(o);
       if (idx >= 0) w.projectiles.splice(idx, 1);
     }
-    const radius = 78 * areaMul;
+    const radius = ORB_ORBIT * areaMul;
     const base = w.t * angVel;
     orbs.forEach((o, i) => {
       o.orbIndex = i;
@@ -750,9 +765,9 @@ export class Engine {
       o.x = w.player.x + Math.cos(base + (i / amount) * TAU) * radius;
       o.y = w.player.y + Math.sin(base + (i / amount) * TAU) * radius;
     });
-    // 接触判定(同一敵への再ヒットは 0.5 秒間隔)
+    // 接触判定(同一敵への再ヒットは rehit 秒間隔。data.ts の orbs.cooldown が司る)
     for (const e of w.enemies) {
-      if (w.t - e.orbHitT < 0.5) continue;
+      if (w.t - e.orbHitT < rehit) continue;
       for (const o of orbs) {
         const rr = o.radius + e.radius;
         if ((e.x - o.x) ** 2 + (e.y - o.y) ** 2 < rr * rr) {
