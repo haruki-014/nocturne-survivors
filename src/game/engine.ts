@@ -675,24 +675,18 @@ export class Engine {
 
   private fireBoomerang(amount: number, st: { damage: number }, might: number, area: number): void {
     const p = this.world.player;
-    const dir = p.dirX >= 0 ? 1 : -1;
     const boomA = BOOM_A * area;
     const boomB = BOOM_B * area;
-    // 楕円中心の自機からの相対オフセット(中心は updateProjectiles で毎フレーム自機に追従)。
-    // 自機の水平方向に boomA だけ前方。自機側端点(位相π)が常に現在の自機位置に重なる。
-    const offX = boomA * dir;
-    const offY = 0;
-    // 複数枚は位相をずらして同時展開
+    // 開始位相 π = 楕円の自機側端点(全個体ここから発つ)。θ 増加で「前方→側→後方→自機」と一周。
+    const startAngle = Math.PI;
+    // 全一周(2π)で自機に戻る。ライフは角速度から逆算した一周所要時間。
+    const life = TAU / BOOM_SPEED;
     for (let i = 0; i < amount; i++) {
-      const phaseOffset = (i / amount) * TAU; // 等間隔に位相をずらす
-      // 開始位相 π = 楕円の自機側端点。θ 増加で「前方→下→後方→上→自機」と一周。
-      const startAngle = Math.PI + phaseOffset;
-      // 全一周(2π)で自機に戻る。ライフは角速度から逆算した一周所要時間。
-      const life = TAU / BOOM_SPEED;
+      // 宝珠と同様に個数で放射状に均等配分(1個:0°, 2個:0/180°, 3個:0/120/240°…)
+      const boomDir = (i / amount) * TAU;
       this.world.projectiles.push({
         kind: "boomerang",
-        x: p.x + offX + boomA * Math.cos(startAngle), // 開始位置(初回 update で再計算される)
-        y: p.y + offY + boomB * Math.sin(startAngle),
+        x: p.x, y: p.y, // 開始は自機位置(初回 update で再計算される)
         vx: 0, vy: 0, // 位置は angle から毎フレーム再計算するため不使用
         damage: st.damage * might,
         radius: 20 * area, // 宝珠(10)の2倍
@@ -701,7 +695,7 @@ export class Engine {
         angle: startAngle, // 楕円位相として流用
         spin: BOOM_SPEED,  // 角速度 rad/s
         hit: new Set(),
-        boomOffX: offX, boomOffY: offY, boomA, boomB,
+        boomDir, boomA, boomB,
       });
     }
   }
@@ -790,14 +784,19 @@ export class Engine {
       if (pr.kind === "orb") continue; // 宝珠は maintainOrbs が管理
       pr.life -= dt;
       if (pr.kind === "boomerang") {
-        // 楕円弧: angle を角速度で進め、楕円中心から位置を再計算する。
-        // 楕円中心は毎フレーム自機の現在位置 + 相対オフセットで求める。これにより
-        // 投擲後に自機が動いても楕円ごと追従し、自機側端点(位相2π)へ必ず戻る。
+        // 楕円弧を投擲方向 boomDir へ回転させ、毎フレーム自機の現在位置を基準に再計算する。
+        // ローカル楕円(進行方向 +X)は中心 (boomA,0)・点 (boomA cosθ, boomB sinθ)。
+        // これを boomDir で回し自機へ加算。投擲後に自機が動いても楕円ごと追従し、
+        // 自機側端点(位相2π)へ必ず戻る。
         pr.angle += pr.spin * dt;
-        const cx = w.player.x + (pr.boomOffX ?? 0);
-        const cy = w.player.y + (pr.boomOffY ?? 0);
-        pr.x = cx + (pr.boomA ?? 0) * Math.cos(pr.angle);
-        pr.y = cy + (pr.boomB ?? 0) * Math.sin(pr.angle);
+        const a = pr.boomA ?? 0;
+        const b = pr.boomB ?? 0;
+        const cos = Math.cos(pr.boomDir ?? 0);
+        const sin = Math.sin(pr.boomDir ?? 0);
+        const lx = a + a * Math.cos(pr.angle); // ローカル x(自機からの距離)
+        const ly = b * Math.sin(pr.angle);     // ローカル y(進行方向に直交)
+        pr.x = w.player.x + lx * cos - ly * sin;
+        pr.y = w.player.y + lx * sin + ly * cos;
       } else {
         pr.x += pr.vx * dt;
         pr.y += pr.vy * dt;

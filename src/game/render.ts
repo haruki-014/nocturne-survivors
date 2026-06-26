@@ -1693,10 +1693,10 @@ function drawProjectiles(v: View): void {
         const r = pr.radius;
         const ba = pr.boomA ?? 120;
         const bb = pr.boomB ?? 200;
-        // 接線方向 + 自軸スピン(楕円1周で4自転 = ブーメランのクルクル感)
+        // 接線方向(投擲方向 boomDir の回転込み) + 自軸スピン(楕円1周で4自転)
         const tx = -ba * Math.sin(pr.angle);
         const ty = bb * Math.cos(pr.angle);
-        ctx.rotate(Math.atan2(ty, tx) + pr.angle * 4);
+        ctx.rotate(Math.atan2(ty, tx) + (pr.boomDir ?? 0) + pr.angle * 4);
         // 月光グロー(加算合成・冷たい青白)
         ctx.globalCompositeOperation = "lighter";
         const g = ctx.createRadialGradient(0, 0, 1, 0, 0, r + 12);
