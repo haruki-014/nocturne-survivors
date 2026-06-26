@@ -78,9 +78,10 @@ const TAU = Math.PI * 2;
 const MAX_ENEMIES = 300;
 const RALLY_RADIUS = 340; // 灰燼の使者が雑魚を鼓舞(加速)する半径
 // ブーメランの楕円弧パラメータ(area=1 のとき)
-const BOOM_A = 120; // 水平半径(進行方向。プレイヤーから楕円中心までの距離)
-const BOOM_B = 200; // 垂直半径(画面縦方向。B > A で縦に長い楕円)
-const BOOM_SPEED = 3.8; // 角速度 rad/s(一周 ≈ 1.65 s)
+const BOOM_A = 92; // 進行方向の半径(短軸。中心はここだけ前方/遠点は 2*A)
+const BOOM_B = 132; // 進行方向に直交する半径(長軸。B > A で投擲方向に細長い弧)
+const BOOM_SPEED = 4.4; // 角速度 rad/s(一周 ≈ 1.43 s。速いほど薙ぎ払い滞空が短い)
+const BOOM_RADIUS = 13; // ヒット半径(宝珠 10 のおよそ 1.3 倍)
 
 // 被弾フィードバック(プレイヤーが接触/呪弾でダメージを受けたときの共通値)
 const PLAYER_HIT_IFRAME = 0.6; // 被弾後の無敵時間(連続ヒットで一気に溶けるのを防ぐ)
@@ -689,7 +690,7 @@ export class Engine {
         x: p.x, y: p.y, // 開始は自機位置(初回 update で再計算される)
         vx: 0, vy: 0, // 位置は angle から毎フレーム再計算するため不使用
         damage: st.damage * might,
-        radius: 20 * area, // 宝珠(10)の2倍
+        radius: BOOM_RADIUS * area,
         pierce: 999,
         life,
         angle: startAngle, // 楕円位相として流用

@@ -141,10 +141,10 @@ export const WEAPONS: Record<string, WeaponDef> = {
     behavior: "boomerang",
     school: "steel",
     statsFor: (lv): WeaponStats => ({
-      damage: 18 + 6 * (lv - 1),
-      cooldown: 1.7 - 0.08 * (lv - 1),
-      amount: 1 + fl((lv - 1) / 3), // Lv4:2 Lv7:3
-      area: 1 + 0.06 * (lv - 1), // 楕円の大きさ倍率
+      damage: 16 + 5 * (lv - 1), // Lv1:16 → Lv8:51
+      cooldown: 1.85 - 0.07 * (lv - 1), // Lv8:1.36s
+      amount: 1 + fl((lv - 1) / 2), // Lv3:2 Lv5:3 Lv7:4(放射の枚数。隔レベルで増)
+      area: 1 + 0.05 * (lv - 1), // 楕円の大きさ倍率
       speed: 1,
       pierce: 999,
       duration: 0, // 使わない(周回速度で自動消滅)
