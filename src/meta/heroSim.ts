@@ -46,9 +46,8 @@ const WAVE_GAP = 1.0; // ウェーブ内の 1 体ずつの湧き間隔
 const MAX_ON_SCREEN = 3; // 同時に画面へ出す敵数の上限
 
 // ---- 戦闘の各種係数(挙動の質感) ----
+// 会心率/会心倍率は装備特性で変わるため heroStats(stats.critChance/critMult)が司る。
 const ENEMY_SPD_MAX = 118; // 敵の歩速の上限
-const HERO_ATK_BONUS_CRIT = 1.8; // 会心の威力倍率
-const CRIT_CHANCE = 0.16; // 会心率
 const REGEN_REST = 0.6; // 小休止中の毎秒回復(最大HP比)
 const REGEN_FIGHT = 0.03; // 戦闘中の微回復(最大HP比/秒)
 const DEFEAT_DROP = 3; // 敗北時に下げる深度
@@ -132,7 +131,7 @@ export function stepSim(sim: HeroSim, profile: Profile, dt: number): void {
 
 /** 小休止: HP を素早く回復し、時間が来たら次の波を始める。 */
 function stepRest(sim: HeroSim, stats: HeroStats, dt: number): void {
-  sim.hp = Math.min(stats.maxHp, sim.hp + stats.maxHp * REGEN_REST * dt);
+  sim.hp = Math.min(stats.maxHp, sim.hp + stats.maxHp * REGEN_REST * stats.regenMul * dt);
   sim.restTimer -= dt;
   if (sim.restTimer <= 0) beginWave(sim);
 }
@@ -173,12 +172,12 @@ function stepCombat(sim: HeroSim, stats: HeroStats, dt: number): void {
     sim.spawnTimer = WAVE_GAP;
   }
 
-  advanceFoes(sim, dt); // 縦列に整列して前進・先頭は近接/後列は投擲
-  advanceFoeShots(sim, dt); // 投げられた飛び道具を進め、到達分を被弾(同フレームの敗北判定に含める)
+  advanceFoes(sim, stats, dt); // 縦列に整列して前進・先頭は近接/後列は投擲
+  advanceFoeShots(sim, stats, dt); // 投げられた飛び道具を進め、到達分を被弾(同フレームの敗北判定に含める)
   heroAttack(sim, stats, dt); // 最前の敵へ魔弾
 
   // 微回復
-  sim.hp = Math.min(stats.maxHp, sim.hp + stats.maxHp * REGEN_FIGHT * dt);
+  sim.hp = Math.min(stats.maxHp, sim.hp + stats.maxHp * REGEN_FIGHT * stats.regenMul * dt);
 
   // 完全に消えた敵を除く(生存=dying0 / 消滅中=dying>0 / 消滅=dying<0)
   sim.foes = sim.foes.filter((f) => f.dying >= 0);
@@ -213,7 +212,7 @@ function spawnFoe(sim: HeroSim): void {
  *   ・後列(i>=1)         … 待ちながら自機へ飛び道具を投げる(近接の半分の威力)
  * これで「後ろで待つだけ」の退屈さを無くし、列が深いほど圧が増す。
  */
-function advanceFoes(sim: HeroSim, dt: number): void {
+function advanceFoes(sim: HeroSim, stats: HeroStats, dt: number): void {
   const depth = sim.live.depth;
   const enemySpd = Math.min(ENEMY_SPD_MAX, 56 + depth * 2);
   const queue = sim.foes.filter((f) => f.dying === 0).sort((a, b) => a.x - b.x);
@@ -228,7 +227,14 @@ function advanceFoes(sim: HeroSim, dt: number): void {
         f.atkCd -= dt;
         if (f.atkCd <= 0) {
           f.atkCd = ENEMY_MELEE_CD;
-          hurtHero(sim, enemyAtkAt(depth));
+          const raw = enemyAtkAt(depth);
+          hurtHero(sim, stats, raw);
+          // 返し刃(thorns): 近接してきた先頭へ反射ダメージ
+          if (stats.thorns > 0) {
+            f.hp -= raw * stats.thorns;
+            f.hitFlash = 0.16;
+            if (f.hp <= 0 && f.dying === 0) killFoe(sim, f, depth, "反射", "kill");
+          }
         }
       }
     } else if (f.x < VW * 0.92) {
@@ -242,18 +248,27 @@ function advanceFoes(sim: HeroSim, dt: number): void {
   }
 }
 
-/** 自機が被弾する共通処理(HP 減・被弾フラッシュ・ダメージ表示)。 */
-function hurtHero(sim: HeroSim, dmg: number): void {
-  sim.hp -= dmg;
+/** 自機が被弾する共通処理(守勢で軽減・HP 減・被弾フラッシュ・ダメージ表示)。 */
+function hurtHero(sim: HeroSim, stats: HeroStats, dmg: number): void {
+  const taken = dmg * (1 - stats.dmgReduction);
+  sim.hp -= taken;
   sim.heroFlash = 1;
-  sim.pops.push({ id: sim._id++, x: HERO_X, y: 4 + Math.random() * 4, text: `-${Math.round(dmg)}`, life: 0.7, kind: "hurt" });
+  sim.pops.push({ id: sim._id++, x: HERO_X, y: 4 + Math.random() * 4, text: `-${Math.round(taken)}`, life: 0.7, kind: "hurt" });
+}
+
+/** 撃破の共通処理(消滅アニメ・撃破/XP の加算・ポップ表示)。 */
+function killFoe(sim: HeroSim, f: SimFoe, depth: number, text: string, kind: SimPop["kind"]): void {
+  f.dying = 0.32;
+  sim.live.kills += 1;
+  sim.live.xp += xpPerKillAt(depth);
+  sim.pops.push({ id: sim._id++, x: f.x, y: 8 + Math.random() * 6, text, life: 0.8, kind });
 }
 
 /** 後列が投げた飛び道具を自機へ進め、到達したら被弾させる。 */
-function advanceFoeShots(sim: HeroSim, dt: number): void {
+function advanceFoeShots(sim: HeroSim, stats: HeroStats, dt: number): void {
   for (const s of sim.foeShots) {
     s.x -= FOE_SHOT_SPEED * dt;
-    if (s.x <= HERO_X + 8) hurtHero(sim, s.dmg);
+    if (s.x <= HERO_X + 8) hurtHero(sim, stats, s.dmg);
   }
   sim.foeShots = sim.foeShots.filter((s) => s.x > HERO_X + 8);
 }
@@ -266,19 +281,16 @@ function heroAttack(sim: HeroSim, stats: HeroStats, dt: number): void {
   sim.heroAtkCd = 1 / stats.atkSpeed;
   sim.lunge = 1;
   sim.cast = 1; // 詠唱の閃光
-  const crit = Math.random() < CRIT_CHANCE;
-  const dmg = stats.atk * (crit ? HERO_ATK_BONUS_CRIT : 1);
+  const crit = Math.random() < stats.critChance;
+  const dmg = stats.atk * (crit ? stats.critMult : 1);
   const target = alive[0];
   target.hp -= dmg;
   target.hitFlash = 0.16; // 被弾で白く光る
   target.x = Math.min(VW, target.x + (crit ? 9 : 5)); // のけぞり(ノックバック)
   sim.bolts.push({ id: sim._id++, fromX: HERO_X + 12, toX: target.x, life: BOLT_TIME, crit });
-  if (target.hp <= 0) {
-    target.dying = 0.32;
-    sim.live.kills += 1;
-    sim.live.xp += xpPerKillAt(sim.live.depth);
-    sim.pops.push({ id: sim._id++, x: target.x, y: 8 + Math.random() * 6, text: crit ? "会心!" : "撃破", life: 0.8, kind: crit ? "crit" : "kill" });
-  }
+  // 吸命(lifesteal): 与ダメに応じて回復
+  if (stats.lifesteal > 0) sim.hp = Math.min(stats.maxHp, sim.hp + dmg * stats.lifesteal);
+  if (target.hp <= 0) killFoe(sim, target, sim.live.depth, crit ? "会心!" : "撃破", crit ? "crit" : "kill");
 }
 
 /** 魔弾・着弾・ポップの寿命を進める。弾は寿命切れで着弾炸裂に変わる。 */

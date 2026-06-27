@@ -467,9 +467,11 @@ button {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  align-items: center;
+  align-items: stretch; /* メニューを均一幅で揃える */
+  width: min(360px, 80vw);
   margin-top: 26px;
 }
+.btn-col > .btn { width: 100%; text-align: center; }
 
 /* ---------- タイトル ---------- */
 
@@ -675,24 +677,81 @@ input[type="range"] {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* タイトルだけは画面全体を使う(中央のみへ詰め込まない)。分岐用 overlay は中央寄せのまま。
+   縦に溢れる場合に切れないよう、上下スクロールを許し上寄せ基準にする。 */
+.overlay.title-overlay {
+  align-items: stretch;
+  justify-content: stretch;
+  overflow-y: auto;
+}
+
 .title-scene {
   position: relative;
+  width: 100%;
+  min-height: 100%;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   text-align: center;
-  padding: 0 24px;
+  gap: 6px;
+  /* 下端はタスクバーヒーロー(86px)を避ける */
+  padding: 40px 24px 104px;
 }
 
-/* 段階的に立ち上がる各ブロック */
+/* ブランディング(ロゴ群)はひとまとめ。内側の余白は各要素の margin が担う */
+.title-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* 段階的に立ち上がる各ブロック(ブランディング / メニュー / 飾り棚) */
 .title-scene > * {
   animation: rise-in 0.9s cubic-bezier(0.2, 0.85, 0.3, 1) backwards;
 }
 .title-scene > *:nth-child(1) { animation-delay: 0.05s; }
-.title-scene > *:nth-child(2) { animation-delay: 0.18s; }
-.title-scene > *:nth-child(3) { animation-delay: 0.32s; }
-.title-scene > *:nth-child(4) { animation-delay: 0.46s; }
-.title-scene > *:nth-child(5) { animation-delay: 0.60s; }
+.title-scene > *:nth-child(2) { animation-delay: 0.22s; }
+.title-scene > *:nth-child(3) { animation-delay: 0.40s; }
+
+/* ── ワイド画面: 2カラムで画面全体を使う(左=銘 / 右=メニュー / 下段=飾り棚) ── */
+@media (min-width: 880px) and (min-height: 480px) {
+  .title-scene {
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    grid-template-areas:
+      "brand menu"
+      "diorama diorama";
+    align-content: center;
+    align-items: center;
+    justify-items: center;
+    width: min(1180px, 92vw);
+    margin: 0 auto;
+    column-gap: clamp(40px, 7vw, 120px);
+    row-gap: clamp(24px, 4vh, 56px);
+    padding: 40px 40px 104px;
+  }
+  .title-brand {
+    grid-area: brand;
+    align-items: flex-start;
+    text-align: left;
+    justify-self: end;
+  }
+  .title-scene .btn-col {
+    grid-area: menu;
+    align-self: center;
+    justify-self: start;
+    width: min(380px, 38vw);
+    margin-top: 0;
+  }
+  .title-scene .diorama { grid-area: diorama; margin-top: 4px; }
+  /* 左寄せに合わせて飾り罫・戦績・操作ヒントの起点も左へ */
+  .title-brand .ornament { justify-content: flex-start; }
+  .title-brand .title-tagline { text-align: left; }
+  .title-scene .btn-col .home-stats { justify-content: flex-start; }
+  .title-scene .btn-col .controls-hint { justify-content: flex-start; }
+}
 
 /* 緋く灯る大ロゴ。微かに呼吸する */
 @keyframes logo-breathe {
@@ -2418,4 +2477,160 @@ input[type="range"] {
   font-size: 11px;
   letter-spacing: 0.06em;
   color: rgba(232, 220, 195, 0.45);
+}
+
+/* ============================================================
+   宝物庫(ミニゲームの装備管理)
+   ============================================================ */
+.treasury {
+  width: min(760px, 94vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: linear-gradient(170deg, #1a1228, #110b1d);
+  border: 1px solid var(--panel-edge);
+  border-radius: 16px;
+  padding: clamp(20px, 3.4vw, 36px);
+  box-shadow: 0 0 0 4px var(--ink), 0 24px 60px rgba(0, 0, 0, 0.7);
+}
+.treasury::-webkit-scrollbar { width: 8px; }
+.treasury::-webkit-scrollbar-thumb { background: rgba(232, 220, 195, 0.16); border-radius: 8px; }
+
+.treasury-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.treasury-title {
+  font-family: var(--font-display-jp);
+  font-weight: 800;
+  font-size: 24px;
+  letter-spacing: 0.34em;
+  text-indent: 0.34em;
+  color: var(--bone);
+}
+.treasury-hero {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.treasury-hero span {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--bone);
+  padding: 4px 9px;
+  border-radius: 8px;
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-edge);
+}
+.treasury-sub { color: var(--bone-dim); font-size: 12.5px; margin: 6px 0 12px; }
+.treasury-section-label {
+  font-family: var(--font-display-jp);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.28em;
+  text-indent: 0.28em;
+  color: var(--gold);
+  margin: 18px 0 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--panel-edge);
+}
+.treasury-empty {
+  color: var(--bone-dim);
+  font-size: 12.5px;
+  text-align: center;
+  padding: 22px 8px;
+}
+
+/* ── 一致セットの進捗バナー ── */
+.set-banner {
+  --accent: var(--gold);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background:
+    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 60%),
+    var(--glass-fill-deep);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--glass-edge));
+  box-shadow: 0 1px 0 var(--glass-rim) inset;
+}
+.set-label { font-family: var(--font-display-jp); font-weight: 800; font-size: 14px; letter-spacing: 0.1em; color: var(--bone); }
+.set-label b { color: var(--accent); margin-left: 8px; font-family: var(--font-mono); }
+.set-pips { display: inline-flex; gap: 5px; }
+.set-pips i { width: 9px; height: 9px; border-radius: 50%; background: var(--panel-edge); transform: rotate(45deg); }
+.set-pips i.on { background: var(--accent); box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 70%, transparent); }
+.set-bonus { margin-left: auto; font-family: var(--font-mono); font-size: 12px; color: var(--bone-dim); }
+.set-bonus em { font-style: normal; color: var(--accent); margin-left: 10px; }
+
+/* ── 装着スロット ── */
+.treasury-slots {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 14px;
+}
+@media (max-width: 560px) { .treasury-slots { grid-template-columns: 1fr; } }
+
+/* ── 宝物庫のグリッド ── */
+.treasury-inv {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+/* 装備カード(スロット枠・宝物庫で共用の見た目) */
+.gear-slot, .gear-card {
+  --rar: var(--bone-dim);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  background: var(--glass-fill);
+  border: 1px solid color-mix(in srgb, var(--rar) 45%, var(--glass-edge));
+  box-shadow: 0 1px 0 var(--glass-rim) inset, 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+.gear-slot.empty { border-style: dashed; border-color: var(--panel-edge); }
+.slot-head, .gear-card-slot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-display-jp);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--bone-dim);
+}
+.slot-ico { width: 15px; height: 15px; color: var(--rar); }
+.slot-empty { color: var(--bone-dim); font-size: 12px; padding: 8px 0; opacity: 0.6; }
+.gear-name { font-family: var(--font-display-jp); font-weight: 800; font-size: 14px; line-height: 1.3; }
+.gear-rar { font-family: var(--font-mono); font-size: 10px; margin-left: 8px; opacity: 0.75; }
+.gear-stats { display: flex; flex-wrap: wrap; gap: 8px; font-family: var(--font-mono); font-size: 12px; color: var(--bone); }
+.gear-affinity {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--bone-dim);
+}
+.gear-affinity.match { color: var(--gold); }
+.gear-affinity b { font-size: 10px; margin-left: 2px; }
+.gear-aff-ico { width: 13px; height: 13px; }
+.gear-trait {
+  font-size: 11px;
+  color: var(--bone-dim);
+  line-height: 1.4;
+}
+.gear-trait i { font-style: normal; font-weight: 800; color: var(--soul); margin-right: 4px; }
+.gear-actions { display: flex; gap: 8px; margin-top: 4px; }
+.btn.gear-act {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-indent: 0.12em;
+  padding: 7px 0;
+  flex: 1;
 }

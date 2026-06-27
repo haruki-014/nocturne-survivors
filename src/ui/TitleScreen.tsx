@@ -13,6 +13,7 @@ interface Props {
   onStart: () => void;
   onCodex: () => void;
   onAltar: () => void;
+  onTreasury: () => void;
   profile: Profile;
   onCurioMove: (id: string, x: number, y: number) => void;
   onHeroSync: (live: { kills: number; xp: number; depth: number }) => void;
@@ -52,10 +53,10 @@ function MoonMark() {
   );
 }
 
-export default function TitleScreen({ onStart, onCodex, onAltar, profile, onCurioMove, onHeroSync }: Props) {
+export default function TitleScreen({ onStart, onCodex, onAltar, onTreasury, profile, onCurioMove, onHeroSync }: Props) {
   const played = profile.runs > 0;
   return (
-    <div className="overlay dim">
+    <div className="overlay dim title-overlay">
       <TaskbarHero profile={profile} onHeroSync={onHeroSync} />
       <div className="embers" aria-hidden="true">
         {EMBERS.map((e, i) => (
@@ -77,22 +78,24 @@ export default function TitleScreen({ onStart, onCodex, onAltar, profile, onCuri
       </div>
 
       <div className="title-scene">
-        <h1 className="title-logo-en">
-          <span className="glyph-lead">N</span>OCTURNE
-        </h1>
-        <div className="title-logo-jp">血 月 の 夜 想 曲</div>
+        <div className="title-brand">
+          <h1 className="title-logo-en">
+            <span className="glyph-lead">N</span>OCTURNE
+          </h1>
+          <div className="title-logo-jp">血 月 の 夜 想 曲</div>
 
-        <div className="ornament" aria-hidden="true">
-          <span className="rule" />
-          <MoonMark />
-          <span className="rule right" />
+          <div className="ornament" aria-hidden="true">
+            <span className="rule" />
+            <MoonMark />
+            <span className="rule right" />
+          </div>
+
+          <p className="title-tagline">
+            月が緋く染まる夜、骸の群れが目を覚ます。
+            <br />
+            灯を掲げ、夜明けまで ── 生き延びよ。
+          </p>
         </div>
-
-        <p className="title-tagline">
-          月が緋く染まる夜、骸の群れが目を覚ます。
-          <br />
-          灯を掲げ、夜明けまで ── 生き延びよ。
-        </p>
 
         <div className="btn-col">
           <button className="btn" onClick={onStart} autoFocus>
@@ -101,6 +104,9 @@ export default function TitleScreen({ onStart, onCodex, onAltar, profile, onCuri
           <button className="btn ghost" onClick={onAltar}>
             祭壇 ── 魂を捧げる
             {profile.souls > 0 && <span className="btn-tag">{profile.souls.toLocaleString()} 魂</span>}
+          </button>
+          <button className="btn ghost" onClick={onTreasury}>
+            宝物庫 ── 装備
           </button>
           <button className="btn ghost" onClick={onCodex}>
             記録の間
@@ -145,11 +151,11 @@ export default function TitleScreen({ onStart, onCodex, onAltar, profile, onCuri
               <kbd>Esc</kbd> 休息
             </span>
           </div>
-
-          {profile.collectedCurios.length > 0 && (
-            <DioramaShelf profile={profile} onCurioMove={onCurioMove} />
-          )}
         </div>
+
+        {profile.collectedCurios.length > 0 && (
+          <DioramaShelf profile={profile} onCurioMove={onCurioMove} />
+        )}
       </div>
     </div>
   );

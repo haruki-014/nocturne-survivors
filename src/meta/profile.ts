@@ -28,14 +28,20 @@ export interface Achievement {
 /** ホームのオートバトラー「タスクバーヒーロー」の装備スロットと戦利品。ロジックは meta/hero.ts。 */
 export type GearSlot = "weapon" | "armor" | "charm";
 
+/** 装備に宿る特性。効果量は meta/hero.ts の TRAITS が司る。 */
+export type GearTrait = "crit" | "lifesteal" | "thorns" | "guard" | "regen" | "swift";
+
 export interface GearItem {
+  id: string; // 一意id(インベントリ管理・装着参照用)
   slot: GearSlot;
   name: string;
   rarity: number; // 0..4 (並/上/希少/秘宝/伝説)
   atk: number; // 攻撃力の加算
   hp: number; // 最大HPの加算
   haste: number; // 攻撃速度(回/秒)の加算
-  power: number; // ベスト装備の比較用スコア
+  power: number; // 比較・売却額の基準スコア
+  affinity: string; // 適合する装い(skinId)。"none"=汎用。現装いと一致でセットボーナス
+  trait?: GearTrait; // 特性(あれば)
 }
 
 /** プレイヤーキャラ自身が本編で拾った装備で強化され、ホームで自動戦闘する状態。 */
@@ -45,7 +51,8 @@ export interface HeroState {
   depth: number; // 現在の到達ウェーブ(撃破で進み、敗北で後退する)
   found: number; // 拾った戦利品の総数(表示用)
   lastTick: number; // 最後に自動戦闘を精算した実時刻(ms)
-  equipped: Partial<Record<GearSlot, GearItem>>; // スロットごとの装備(ベスト装備を自動装着)
+  equipped: Partial<Record<GearSlot, GearItem>>; // スロットごとの装着中の装備
+  inventory: GearItem[]; // 未装着の所持装備(宝物庫で手動装着/売却)
 }
 
 export interface Profile {
@@ -150,7 +157,18 @@ export function emptyProfile(): Profile {
     achievements: [], modeBest: {}, lastRun: null,
     souls: 0, totalSouls: 0, upgrades: {}, selectedSkin: DEFAULT_SKIN, unlockedSkins: [DEFAULT_SKIN],
     collectedCurios: [], curioLayout: {},
-    hero: { xp: 0, kills: 0, depth: 1, found: 0, lastTick: Date.now(), equipped: {} },
+    hero: { xp: 0, kills: 0, depth: 1, found: 0, lastTick: Date.now(), equipped: {}, inventory: [] },
+  };
+}
+
+/** 旧データ/外部由来の装備に id・affinity を補い、欠損を許容する(マイグレーション補助)。 */
+function normalizeGear(it: GearItem | undefined, slot: GearSlot): GearItem | undefined {
+  if (!it) return undefined;
+  return {
+    ...it,
+    slot: it.slot ?? slot,
+    id: it.id ?? `g${Math.random().toString(36).slice(2, 9)}`,
+    affinity: it.affinity ?? "none",
   };
 }
 
@@ -174,7 +192,14 @@ export function loadProfile(): Profile {
         depth: p.hero?.depth ?? 1,
         found: p.hero?.found ?? 0,
         lastTick: p.hero?.lastTick ?? Date.now(),
-        equipped: { ...(p.hero?.equipped ?? {}) },
+        equipped: {
+          weapon: normalizeGear(p.hero?.equipped?.weapon, "weapon"),
+          armor: normalizeGear(p.hero?.equipped?.armor, "armor"),
+          charm: normalizeGear(p.hero?.equipped?.charm, "charm"),
+        },
+        inventory: (p.hero?.inventory ?? [])
+          .map((it) => normalizeGear(it, it?.slot ?? "weapon"))
+          .filter((it): it is GearItem => !!it),
       },
     };
     // 世代マイグレーション: v2 でコスト改定。既存の恒久強化レベルを一度だけ全リセットする

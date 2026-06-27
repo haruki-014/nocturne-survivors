@@ -32,6 +32,7 @@ import EndScreen from "./ui/EndScreen";
 import CodexScreen from "./ui/CodexScreen";
 import ModeSelect from "./ui/ModeSelect";
 import AltarScreen from "./ui/AltarScreen";
+import TreasuryScreen from "./ui/TreasuryScreen";
 import {
   collectCurio,
   loadProfile,
@@ -40,12 +41,13 @@ import {
   selectSkin,
   setCurioPosition,
   type Achievement,
+  type GearSlot,
   type Profile,
 } from "./meta/profile";
 import { buyUpgrade, computeMetaBonus } from "./meta/altar";
-import { addLoot, syncHero } from "./meta/hero";
+import { addLoot, equipItem, sellItem, syncHero, unequipItem } from "./meta/hero";
 
-type Screen = "title" | "modeselect" | "codex" | "altar" | "playing" | "levelup" | "paused" | "gameover" | "victory";
+type Screen = "title" | "modeselect" | "codex" | "altar" | "treasury" | "playing" | "levelup" | "paused" | "gameover" | "victory";
 
 const SETTINGS_KEY = "nocturne.settings.v1";
 
@@ -205,6 +207,17 @@ export default function App() {
     setProfile((prev) => selectSkin(prev, id));
   }, []);
 
+  // 宝物庫: 装備の装着 / 取り外し / 売却(いずれも hero.ts が保存まで担う)
+  const onEquipGear = useCallback((gearId: string) => {
+    setProfile((prev) => equipItem(prev, gearId));
+  }, []);
+  const onUnequipGear = useCallback((slot: GearSlot) => {
+    setProfile((prev) => unequipItem(prev, slot));
+  }, []);
+  const onSellGear = useCallback((gearId: string) => {
+    setProfile((prev) => sellItem(prev, gearId));
+  }, []);
+
   // 飾り棚での遺物の移動(0..1 正規化座標)を保存する
   const onCurioMove = useCallback((id: string, x: number, y: number) => {
     setProfile((prev) => setCurioPosition(prev, id, x, y));
@@ -233,6 +246,7 @@ export default function App() {
           onStart={() => setScreen("modeselect")}
           onCodex={() => setScreen("codex")}
           onAltar={() => setScreen("altar")}
+          onTreasury={() => setScreen("treasury")}
           profile={profile}
           onCurioMove={onCurioMove}
           onHeroSync={onHeroSync}
@@ -248,6 +262,16 @@ export default function App() {
           profile={profile}
           onBuy={onBuyUpgrade}
           onSelectSkin={onSelectSkin}
+          onBack={() => setScreen("title")}
+        />
+      )}
+
+      {screen === "treasury" && (
+        <TreasuryScreen
+          profile={profile}
+          onEquip={onEquipGear}
+          onUnequip={onUnequipGear}
+          onSell={onSellGear}
           onBack={() => setScreen("title")}
         />
       )}
