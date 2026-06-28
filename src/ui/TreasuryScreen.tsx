@@ -6,7 +6,7 @@
 //     onEquip/onUnequip/onSell へ流すだけ(祭壇/記録の間と同じ作法)。
 
 import type { GearItem, GearSlot, Profile } from "../meta/profile";
-import { heroView, RARITY_COLORS, RARITY_NAMES, TRAITS, slotLabel, skinSignature, setBonusPct } from "../meta/hero";
+import { heroView, isAffinityMatch, RARITY_COLORS, RARITY_NAMES, TRAITS, slotLabel, skinSignature, setBonusPct } from "../meta/hero";
 import { SKINS_BY_ID } from "../game/data";
 import { Sigil } from "./icons";
 
@@ -28,7 +28,7 @@ function affinityName(affinity: string): string {
 
 /** 1点の装備カードの中身(装着スロット枠でも宝物庫グリッドでも共用)。 */
 function GearBody({ item, currentSkin }: { item: GearItem; currentSkin: string }) {
-  const match = item.affinity !== "none" && item.affinity === currentSkin;
+  const match = isAffinityMatch(item, currentSkin);
   const tr = item.trait ? TRAITS[item.trait] : null;
   return (
     <>

@@ -63,6 +63,24 @@ export const setBonusPct = (match: number): number => SET_BONUS[Math.min(3, Math
 let _gearSeq = 0;
 const gearId = (): string => `g${Date.now().toString(36)}${(_gearSeq++).toString(36)}`;
 
+/** 売却で得られる XP(power の半分)。上限超過の自動売却と宝物庫の売却で共有。 */
+const sellValue = (item: GearItem): number => Math.round(item.power * 0.5);
+
+/** 装備が指定の装いに「適合」するか(汎用 none は不一致)。一致セット判定の唯一の基準。 */
+export const isAffinityMatch = (item: GearItem, skinId: string): boolean =>
+  item.affinity !== "none" && item.affinity === skinId;
+
+/** 全特性を 0 で初期化したカウンタ(TRAITS の増減に追従)。 */
+const freshTraitCount = (): Record<GearTrait, number> =>
+  Object.fromEntries(TRAIT_KEYS.map((k) => [k, 0])) as Record<GearTrait, number>;
+
+/** hero を差し替えた新 profile を保存して返す(装備操作で共通)。 */
+function commitHero(prev: Profile, hero: HeroState): Profile {
+  const p = { ...prev, hero };
+  saveProfile(p);
+  return p;
+}
+
 // スロット別の名詞プール(レアリティで接頭辞を付ける)
 const SLOT_NOUNS: Record<GearSlot, string[]> = {
   weapon: ["短刀", "長剣", "戦斧", "刺突剣", "大鎌"],
@@ -131,14 +149,10 @@ export function addLoot(prev: Profile, tier: number): Profile {
     if (inventory.length > INV_CAP) {
       // 宝物庫が満杯: 最も価値の低い1点を売却して XP に換える
       inventory.sort((a, b) => a.power - b.power);
-      const sold = inventory.shift()!;
-      xpGain = Math.round(sold.power * 0.5);
+      xpGain = sellValue(inventory.shift()!);
     }
   }
-  const hero: HeroState = { ...h, equipped, inventory, found: h.found + 1, xp: h.xp + xpGain };
-  const p = { ...prev, hero };
-  saveProfile(p);
-  return p;
+  return commitHero(prev, { ...h, equipped, inventory, found: h.found + 1, xp: h.xp + xpGain });
 }
 
 /** 宝物庫の装備をスロットへ装着する。元の装備があれば宝物庫へ戻す。 */
@@ -150,10 +164,7 @@ export function equipItem(prev: Profile, id: string): Profile {
   const inventory = h.inventory.filter((_, i) => i !== idx);
   const prevEq = h.equipped[item.slot];
   if (prevEq) inventory.push(prevEq);
-  const equipped = { ...h.equipped, [item.slot]: item };
-  const p = { ...prev, hero: { ...h, equipped, inventory } };
-  saveProfile(p);
-  return p;
+  return commitHero(prev, { ...h, equipped: { ...h.equipped, [item.slot]: item }, inventory });
 }
 
 /** 装着中の装備を外して宝物庫へ戻す。 */
@@ -163,9 +174,7 @@ export function unequipItem(prev: Profile, slot: GearSlot): Profile {
   if (!it) return prev;
   const equipped = { ...h.equipped };
   delete equipped[slot];
-  const p = { ...prev, hero: { ...h, equipped, inventory: [...h.inventory, it] } };
-  saveProfile(p);
-  return p;
+  return commitHero(prev, { ...h, equipped, inventory: [...h.inventory, it] });
 }
 
 /** 宝物庫の装備を売却して XP に換える(power の半分)。 */
@@ -173,10 +182,7 @@ export function sellItem(prev: Profile, id: string): Profile {
   const h = prev.hero;
   const it = h.inventory.find((i) => i.id === id);
   if (!it) return prev;
-  const inventory = h.inventory.filter((i) => i.id !== id);
-  const p = { ...prev, hero: { ...h, inventory, xp: h.xp + Math.round(it.power * 0.5) } };
-  saveProfile(p);
-  return p;
+  return commitHero(prev, { ...h, inventory: h.inventory.filter((i) => i.id !== id), xp: h.xp + sellValue(it) });
 }
 
 // ---- レベルの導出 ----
@@ -219,7 +225,7 @@ export function heroStats(prev: Profile): HeroStats {
   let atk = 6 + (level - 1) * 1.6;
   let maxHp = 60 + (level - 1) * 10;
   let atkSpeed = 1.0; // 攻撃速度(回/秒)。護符の haste で上がる
-  const traitCount: Record<GearTrait, number> = { crit: 0, lifesteal: 0, thorns: 0, guard: 0, regen: 0, swift: 0 };
+  const traitCount = freshTraitCount();
   let setMatch = 0;
   // 装備3スロット(武器=攻撃 / 鎧=HP / 護符=手数)の補正を加算
   for (const slot of SLOTS) {
@@ -229,7 +235,7 @@ export function heroStats(prev: Profile): HeroStats {
     maxHp += it.hp;
     atkSpeed += it.haste;
     if (it.trait) traitCount[it.trait]++;
-    if (it.affinity !== "none" && it.affinity === prev.selectedSkin) setMatch++;
+    if (isAffinityMatch(it, prev.selectedSkin)) setMatch++;
   }
   // 一致セットボーナス(攻撃・HP)。3一致で装いの固有特性が開花。
   const matchMul = setBonusPct(setMatch);
