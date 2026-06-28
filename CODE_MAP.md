@@ -12,7 +12,7 @@
         │   │ 第2層 付属的 / AUXILIARY … 周辺の仕組み │  │
         │   │   ┌──────────────────────────────────┐ │  │
         │   │   │ 第1層 主要 / CORE … ゲーム本体    │ │  │
-        │   │   │   types / data / engine / render  │ │  │
+        │   │   │  types/data/engine/render/sprites │ │  │
         │   │   └──────────────────────────────────┘ │  │
         │   │  App統合 / メタ進行 / 各画面UI          │  │
         │   └────────────────────────────────────────┘  │
@@ -32,7 +32,8 @@ TypeScript で、ブラウザでもデスクトップでも同じように動き
 | [`types.ts`](src/game/types.ts) | エンジンと UI が受け渡すデータの**型(契約)**を一元定義 | 実行コードは持たない注釈層。`World` が1ラン分の全状態を束ねる中心。 |
 | [`data.ts`](src/game/data.ts) | 武器・真化・専用技・加護・流派・敵・**ボス(`BOSSES`＋`ability`)**・ウェーブ・モード・スキン・遺物の**数値とテーブル** | 大半は定数。`statsFor(lv)` がレベルごとの性能を計算して返す。**バランス調整はここだけ**で完結。 |
 | [`engine.ts`](src/game/engine.ts) | プレイ中の全状態を持ち、毎フレーム世界を1コマ進める**心臓** | `requestAnimationFrame` で `loop()` を回し、`update()` が「入力→武器→弾→敵→経験値→演出→湧き→勝敗」を一定順で処理。ローリング回避・**ボス固有能力(`updateBossAbility`)** もここ。UI とは `start/setPaused/applyChoice/setMeta`(入口)と `emit`(出口)だけで繋がる。 |
-| [`render.ts`](src/game/render.ts) | `World` を読んで Canvas2D に1フレーム描く**目** | スプライトを事前ラスタライズしてキャッシュ→`drawImage`。状態は読むだけ。`Renderer` インターフェースなので将来 WebGL へ差し替え可。 |
+| [`render.ts`](src/game/render.ts) | `World` を読んで Canvas2D に1フレーム描く**目**(描画パス) | 各パスは共有 `View`(ctx/カメラ/座標変換)を受け取る `drawXxx(v)` 群。状態は読むだけ。`Renderer` インターフェースなので将来 WebGL へ差し替え可。`enemyPortrait/skinPortrait` は sprites.ts を再エクスポート。 |
+| [`sprites.ts`](src/game/sprites.ts) | スプライトを**事前ラスタライズ**する工房（render.ts から分離） | 敵・自機・道具・地形を一度だけオフスクリーン canvas に焼き `spriteCache` に保持→render.ts が `drawImage` で貼る。色ヘルパ・`makeSprite`・`enemyPortrait/skinPortrait` を提供。状態には触れない。 |
 
 **この層の境界（ここだけ覚えれば全体が繋がる）**
 - UI →エンジン：`start()` / `setPaused()` / `applyChoice()` / `setMeta()`
@@ -50,6 +51,10 @@ TypeScript で、ブラウザでもデスクトップでも同じように動き
 | [`App.tsx`](src/App.tsx) | エンジンと全画面を束ねる**司令塔** | `screen` state で表示画面を切替。エンジンの `emit` を受けて記録保存(`recordRun`)・カード提示・HUD更新を行う。 |
 | [`meta/profile.ts`](src/meta/profile.ts) | ランを越えて積む**永続データ**(記録/称号/魂/解放) | `localStorage` に保存。`recordRun()` がラン終了の集計(記録更新+魂付与+称号/装い解放)を一括処理。 |
 | [`meta/altar.ts`](src/meta/altar.ts) | **恒久強化**の定義と効果計算 | `computeMetaBonus(profile)` が全強化を畳み込み `MetaBonus` を生成→`engine.setMeta()` へ。費用は等比で逓増。 |
+| [`meta/hero.ts`](src/meta/hero.ts) | ホームのオートバトラー「タスクバーヒーロー」の**純ロジック**(装備/特性/ステータス/ウェーブ) | 戦利品生成(`rollLoot`)・宝物庫の装着/売却(`equipItem`/`sellItem`)・特性(`TRAITS`)・装い適合の一致セット・`heroStats`・`offlineProgress`(放置精算)。DOM 非依存。 |
+| [`meta/heroSim.ts`](src/meta/heroSim.ts) | タスクバーヒーローの**戦闘シミュレーション**(状態機械) | `stepSim` がウェーブ制の rest→fight→defeat を1フレーム進める。`heroStats` の特性(会心/吸命/守勢…)を反映。描画は ui/TaskbarHero が担当。 |
+| [`ui/TaskbarHero.tsx`](src/ui/TaskbarHero.tsx) | ホーム下部でヒーローが**自動戦闘する帯**の駆動＋描画 | `requestAnimationFrame` で `stepSim` を回し DOM へ描く。進行は `onHeroSync` で App→profile に保存。 |
+| [`ui/TreasuryScreen.tsx`](src/ui/TreasuryScreen.tsx) | **宝物庫**(ミニゲームの装備管理) | 3スロットへの装着/取り外し/売却と、装いに適合する一致セットの進捗を表示。判定・保存は hero.ts、操作は App 経由。 |
 | [`ui/LevelUpModal.tsx`](src/ui/LevelUpModal.tsx) | レベルアップの**カード選択** | A/D＋Enter のキー操作。選んだ1枚を `onPick` で返すだけ(候補生成はエンジン)。 |
 | [`ui/HUD.tsx`](src/ui/HUD.tsx) | プレイ中の**計器表示** | `HudState` の数値を割合に直してバー化。`pointer-events:none` で入力を奪わない。 |
 | [`ui/AltarScreen.tsx`](src/ui/AltarScreen.tsx) | 祭壇(強化購入・装い選択)の**店頭** | 購入/選択を親へ通知。判定・保存は持たない。 |
