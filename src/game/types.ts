@@ -457,6 +457,39 @@ export interface Settings {
   damageNumbers: boolean;
   screenShake: boolean;
   hudScale: number; // 0.8 - 1.4
+  bgm: boolean; // 背景音楽
+  sfx: boolean; // 効果音
+}
+
+// ---------- 音声(描画と同じく「注入される出力装置」) ----------
+
+/** 単発の効果音キュー。エンジン/UI が鳴らしたい瞬間に名前で要求する。 */
+export type SfxCue =
+  | "attack" // 武器の発射(魔弾/刃/帰刃/雷)
+  | "hit" // 自機の被弾
+  | "kill" // 敵の撃破
+  | "pickup" // 道具(回復/磁石/遺物/戦利品)の取得
+  | "dodge" // ローリング回避
+  | "boss" // ボス到来
+  | "levelup" // レベルアップ(アルカナ提示)
+  | "gameover" // 敗北
+  | "victory" // 夜明け(勝利)
+  | "select"; // UI 決定音
+
+/** BGM の場面。場面ごとに重ねる音楽レイヤーを切り替える。 */
+export type AudioScene = "menu" | "battle" | "boss" | "silent";
+
+/**
+ * 音声バックエンドの抽象。Renderer と同じく「注入される出力装置」で、
+ * エンジン(純TS)は実装を知らず cue()/setScene() を呼ぶだけ。実体(WebAudioPlayer)は
+ * App が生成して注入する。ブラウザの自動再生制限のため resume() はユーザー操作で呼ぶ。
+ */
+export interface AudioSink {
+  resume(): void; // ユーザー操作で AudioContext を解錠/再開する
+  cue(name: SfxCue): void; // 単発の効果音を鳴らす(無効時は無視)
+  setScene(scene: AudioScene): void; // BGM の場面を切り替える
+  setEnabled(bgm: boolean, sfx: boolean): void; // 設定トグルの反映
+  dispose(): void; // 後始末
 }
 
 /**

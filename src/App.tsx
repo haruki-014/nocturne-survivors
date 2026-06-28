@@ -15,7 +15,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Engine } from "./game/engine";
+import { WebAudioPlayer } from "./audio/webAudio";
 import type {
+  AudioSink,
   EngineEvent,
   GameMode,
   HudState,
@@ -52,7 +54,7 @@ type Screen = "title" | "modeselect" | "codex" | "altar" | "treasury" | "playing
 const SETTINGS_KEY = "nocturne.settings.v1";
 
 function loadSettings(): Settings {
-  const def: Settings = { damageNumbers: true, screenShake: true, hudScale: 1 };
+  const def: Settings = { damageNumbers: true, screenShake: true, hudScale: 1, bgm: true, sfx: true };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return def;
@@ -61,6 +63,8 @@ function loadSettings(): Settings {
       damageNumbers: typeof p.damageNumbers === "boolean" ? p.damageNumbers : def.damageNumbers,
       screenShake: typeof p.screenShake === "boolean" ? p.screenShake : def.screenShake,
       hudScale: typeof p.hudScale === "number" ? Math.min(1.4, Math.max(0.8, p.hudScale)) : 1,
+      bgm: typeof p.bgm === "boolean" ? p.bgm : def.bgm,
+      sfx: typeof p.sfx === "boolean" ? p.sfx : def.sfx,
     };
   } catch {
     return def;
@@ -70,6 +74,9 @@ function loadSettings(): Settings {
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
+  // 音声(手続き合成)。生成は一度きり。ブラウザ制限のため最初の操作で resume する。
+  const audioRef = useRef<AudioSink | null>(null);
+  if (audioRef.current === null) audioRef.current = new WebAudioPlayer();
 
   const [screen, setScreen] = useState<Screen>("title");
   const [hud, setHud] = useState<HudState | null>(null);
@@ -99,6 +106,7 @@ export default function App() {
           case "levelup":
             setChoices(e.choices);
             setScreen("levelup");
+            audioRef.current?.cue("levelup");
             break;
           case "curio":
             // ステージで拾った遺物を収集に加えて保存(ホーム飾り棚に並ぶ)
@@ -112,6 +120,8 @@ export default function App() {
           case "victory":
             setStats(e.stats);
             setScreen(e.type === "victory" ? "victory" : "gameover");
+            audioRef.current?.cue(e.type); // 敗北/勝利のスティンガー
+            audioRef.current?.setScene("menu"); // BGM を題の夜想へ戻す
             setProfile((prev) => {
               const { profile: next, unlocked: got, unlockedSkins: skins, soulsEarned: souls } = recordRun(prev, e.stats);
               setUnlocked(got);
@@ -122,7 +132,9 @@ export default function App() {
             break;
         }
       },
-      loadSettings()
+      loadSettings(),
+      undefined, // makeRenderer は既定(Canvas2DRenderer)
+      audioRef.current, // 音声シンク(手続き合成)を注入
     );
     engineRef.current = engine;
     return () => {
@@ -131,10 +143,11 @@ export default function App() {
     };
   }, []);
 
-  // ---- 設定の反映: エンジン / CSS変数 / localStorage ----
+  // ---- 設定の反映: エンジン / 音声 / CSS変数 / localStorage ----
   useEffect(() => {
     const engine = engineRef.current;
     if (engine) engine.settings = settings;
+    audioRef.current?.setEnabled(settings.bgm, settings.sfx); // BGM/効果音トグルを音声へ
     document.documentElement.style.setProperty("--hud-scale", String(settings.hudScale));
     try {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -142,6 +155,26 @@ export default function App() {
       /* 保存不可でも続行 */
     }
   }, [settings]);
+
+  // ---- 音声: 自動再生制限への対応(最初のユーザー操作で解錠)＋アンマウント後始末 ----
+  useEffect(() => {
+    const unlock = () => audioRef.current?.resume();
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+    const audio = audioRef.current;
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+      audio?.dispose();
+    };
+  }, []);
+
+  // ---- BGM の場面: メニュー系の画面では夜想(menu)。戦闘/ボスはエンジンが切替える。 ----
+  useEffect(() => {
+    if (screen === "title" || screen === "codex" || screen === "altar" || screen === "treasury" || screen === "modeselect") {
+      audioRef.current?.setScene("menu");
+    }
+  }, [screen]);
 
   // ---- 恒久強化・装い・収集済み遺物をエンジンへ反映(装い変更はタイトル背景にも即時反映) ----
   //   ※ ヒーローの装備強化は「ミニゲーム内だけ」効くため、本編の MetaBonus には混ぜない。

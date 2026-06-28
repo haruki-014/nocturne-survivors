@@ -49,6 +49,7 @@ import {
 import type { BossAbility, BossDef } from "./data";
 import { Canvas2DRenderer } from "./render";
 import type {
+  AudioSink,
   Derived,
   Enemy,
   EnemyKind,
@@ -119,6 +120,7 @@ type PauseReason = "none" | "menu" | "levelup" | "ended";
 
 export class Engine {
   private renderer: Renderer;
+  private audio: AudioSink | null;
   private emit: (e: EngineEvent) => void;
   settings: Settings;
 
@@ -173,8 +175,10 @@ export class Engine {
     emit: (e: EngineEvent) => void,
     settings: Settings,
     makeRenderer: (canvas: HTMLCanvasElement) => Renderer = (c) => new Canvas2DRenderer(c),
+    audio: AudioSink | null = null,
   ) {
     this.renderer = makeRenderer(canvas);
+    this.audio = audio;
     this.emit = emit;
     this.settings = settings;
     window.addEventListener("keydown", this.onKeyDown);
@@ -236,6 +240,7 @@ export class Engine {
     this.hudTimer = 0;
     this.pause = "none";
     this.pushHud();
+    this.audio?.setScene("battle"); // 戦闘 BGM を開始(タイトルの menu から切替)
     this.beginGrace(1.6); // 夜の始まり: 構えの間
     if (!this.running) {
       this.running = true;
@@ -557,6 +562,7 @@ export class Engine {
       p.stamina -= ROLL_COST;
       p.roll = ROLL_TIME;
       p.invuln = Math.max(p.invuln, ROLL_IFRAME); // 回避中は無敵
+      this.audio?.cue("dodge");
       // 回避方向: 入力があればその向き、無ければ最後の向き
       if (len > 0) { p.rollDirX = mx; p.rollDirY = my; }
       else { p.rollDirX = p.dirX; p.rollDirY = p.dirY; }
@@ -644,6 +650,7 @@ export class Engine {
         case "boomerang": this.fireBoomerang(amount, stp, d.might, d.area, vis); break;
         case "lightning": this.fireLightning(amount, stp, d.might, d.area, vis); break;
       }
+      this.audio?.cue("attack"); // 発射音(クールダウン毎=自然に間引かれる。重複は player 側で更に制限)
     }
   }
 
@@ -990,6 +997,7 @@ export class Engine {
         p.invuln = PLAYER_HIT_IFRAME;
         w.flash = PLAYER_HIT_FLASH;
         w.shake = Math.min(1, w.shake + 0.45);
+        this.audio?.cue("hit");
         // 吸血卿の吸血: 打撃が通れば最大HPの一部を自己回復する
         if (e.kind === "boss" && e.bossType && BOSSES_BY_ID[e.bossType]?.ability === "swarm") {
           e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.03);
@@ -1223,6 +1231,7 @@ export class Engine {
         p.invuln = PLAYER_HIT_IFRAME;
         w.flash = PLAYER_HIT_FLASH;
         w.shake = Math.min(1, w.shake + 0.35);
+        this.audio?.cue("hit");
         this.burst(s.x, s.y, 8, "#c08aff", 2.4);
         w.enemyShots.splice(i, 1);
       }
@@ -1252,6 +1261,7 @@ export class Engine {
           p.invuln = PLAYER_HIT_IFRAME;
           w.flash = PLAYER_HIT_FLASH;
           w.shake = Math.min(1, w.shake + 0.4);
+          this.audio?.cue("hit");
           this.burst(p.x, p.y, 10, s.color, 2.6);
         }
       }
@@ -1295,6 +1305,7 @@ export class Engine {
     if (idx < 0) return;
     w.enemies.splice(idx, 1);
     w.kills++;
+    this.audio?.cue("kill"); // 撃破音(player 側で 50ms 間引き)
     if (e.variant !== "normal") {
       this.aliveChampions = Math.max(0, this.aliveChampions - 1);
       this.championKills++;
@@ -1323,6 +1334,7 @@ export class Engine {
         w.pickups.push({ kind: "magnet", x: e.x + 28, y: e.y });
         w.pickups.push({ kind: "loot", x: e.x - 28, y: e.y, lootTier: 2 }); // ボスは上質の戦利品
         this.slowmo = 0.6;
+        this.audio?.setScene("battle"); // 反復ボス撃破後は通常戦闘の BGM へ戻す
       } else {
         w.bossDefeated = true;
         this.slowmo = 1.4;
@@ -1394,6 +1406,7 @@ export class Engine {
       const pk = w.pickups[i];
       if ((pk.x - p.x) ** 2 + (pk.y - p.y) ** 2 < 26 * 26) {
         w.pickups.splice(i, 1);
+        this.audio?.cue("pickup"); // 道具取得(経験石は高頻度のため無音)
         if (pk.kind === "potion") {
           p.hp = Math.min(p.maxHp, p.hp + 30);
           w.texts.push({ x: p.x, y: p.y - 30, text: "+30", life: 0.8, color: "#7be08a", size: 15 });
@@ -1542,6 +1555,8 @@ export class Engine {
     if (w.t >= this.nextBossTime && !w.boss) {
       w.boss = this.spawnBoss(this.edgePoint());
       this.bossSpawned = true;
+      this.audio?.cue("boss"); // 到来の合図
+      this.audio?.setScene("boss"); // BGM を緊迫した夜想へ切り替える
       this.nextBossTime = m.bossRepeat ? this.nextBossTime + m.bossInterval : Infinity;
     }
 

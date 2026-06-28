@@ -116,6 +116,16 @@ export default function PauseMenu({ hud, settings, onSettings, onResume, onQuit 
             checked={settings.screenShake}
             onChange={(v) => onSettings({ ...settings, screenShake: v })}
           />
+          <Toggle
+            label="BGM(背景音楽)"
+            checked={settings.bgm}
+            onChange={(v) => onSettings({ ...settings, bgm: v })}
+          />
+          <Toggle
+            label="効果音"
+            checked={settings.sfx}
+            onChange={(v) => onSettings({ ...settings, sfx: v })}
+          />
           <div className="setting-row">
             <span>
               HUDの大きさ{" "}
