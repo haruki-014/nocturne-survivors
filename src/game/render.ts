@@ -1085,10 +1085,10 @@ export function renderWorld(
   drawAtmosphere(v);
 
   // --- 特異種の画面外マーカー(視界外にいる間も存在を知らせる) ---
-  drawVariantMarkers(ctx, vw, vh, world, camX, camY);
+  drawVariantMarkers(v);
 
   // --- ミニマップ(聖域内の自分と敵の位置) ---
-  drawMinimap(ctx, vw, vh, world);
+  drawMinimap(v);
 
   // --- 再開カウントダウン(構えの間) ---
   drawGrace(v);
@@ -1098,14 +1098,8 @@ export function renderWorld(
 
 // 特異種(大型/色違い)が視界の外にいる間、画面の縁に矢羽根を出して位置と接近を知らせる。
 // 大型=琥珀(加速オーラ), 色違い=紫(硬化オーラ)で、本体のオーラリングと色を揃える。
-function drawVariantMarkers(
-  ctx: CanvasRenderingContext2D,
-  vw: number,
-  vh: number,
-  world: World,
-  camX: number,
-  camY: number,
-): void {
+function drawVariantMarkers(v: View): void {
+  const { ctx, vw, vh, world, camX, camY } = v;
   const cx = vw / 2;
   const cy = vh / 2;
   const inset = 48; // 画面端からの差し込み量
@@ -1161,7 +1155,8 @@ function drawVariantMarkers(
 }
 
 // ミニマップ: 画面右下に聖域全体を俯瞰し、自機・敵・エリート・ボス・道具を点で示す。
-function drawMinimap(ctx: CanvasRenderingContext2D, vw: number, vh: number, world: World): void {
+function drawMinimap(v: View): void {
+  const { ctx, vw, vh, world } = v;
   const R = 76; // 半径(px)
   const pad = 18;
   const cx = vw - R - pad;
