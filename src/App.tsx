@@ -335,7 +335,9 @@ export default function App() {
         />
       )}
 
-      {screen === "levelup" && <LevelUpModal choices={choices} onPick={pickChoice} />}
+      {screen === "levelup" && (
+        <LevelUpModal choices={choices} onPick={pickChoice} hud={hud} skinId={profile.selectedSkin} />
+      )}
 
       {screen === "paused" && (
         <PauseMenu

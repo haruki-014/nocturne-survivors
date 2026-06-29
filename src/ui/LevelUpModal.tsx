@@ -11,9 +11,10 @@
 //     ・見た目: 真化は金(is-evolution)、専用技は紫(is-signature)の格を与える。
 
 import { useEffect, useRef, useState } from "react";
-import type { UpgradeChoice } from "../game/types";
+import type { HudState, UpgradeChoice } from "../game/types";
 import { WEAPONS, PASSIVES, SCHOOLS } from "../game/data";
 import { Sigil } from "./icons";
+import SkillTree from "./SkillTree";
 
 // 選択画面が出てから決定入力を受け付けるまでの間(ミリ秒)。誤確定の防止と「間」の演出。
 const OPEN_LOCK_MS = 420;
@@ -35,15 +36,21 @@ function maxLevelOf(c: UpgradeChoice): number {
 interface Props {
   choices: UpgradeChoice[];
   onPick: (c: UpgradeChoice) => void;
+  hud: HudState | null; // 現在のビルド(系統樹に反映)
+  skinId: string; // 現在の装い(固有技=秘伝の表示用)
 }
 
-export default function LevelUpModal({ choices, onPick }: Props) {
+export default function LevelUpModal({ choices, onPick, hud, skinId }: Props) {
   // キー操作中の連打で同じ選択肢セットに二重適用しないようガード
   const pickedRef = useRef(false);
   // A/D で動かすカーソル位置。選択肢が入れ替わったら先頭へ戻す。
   const [cursor, setCursor] = useState(0);
   const cursorRef = useRef(0);
   cursorRef.current = cursor;
+  // 系統樹オーバーレイの開閉(Tab/系統樹ボタン)。開いている間は閲覧専用。
+  const [showTree, setShowTree] = useState(false);
+  const showTreeRef = useRef(false);
+  showTreeRef.current = showTree;
   const btnRefs = useRef<(HTMLButtonElement | null)[]>([]);
   // この時刻まで「決定」入力を無視する(開幕の間)。choices が変わる度に張り直す。
   const lockUntilRef = useRef(0);
@@ -65,6 +72,18 @@ export default function LevelUpModal({ choices, onPick }: Props) {
       if (pickedRef.current) return;
       const n = choices.length;
       if (n === 0) return;
+
+      // Tab / T で系統樹を開閉(焦点移動を抑止)。
+      if (e.code === "Tab" || e.code === "KeyT") {
+        e.preventDefault();
+        setShowTree((v) => !v);
+        return;
+      }
+      // 系統樹を開いている間は閲覧専用: Esc で閉じ、他の選択入力は無視する。
+      if (showTreeRef.current) {
+        if (e.code === "Escape") { e.preventDefault(); setShowTree(false); }
+        return;
+      }
 
       // カーソル移動(A/D・←→)は開幕の間でも常時受け付ける
       if (e.code === "KeyA" || e.code === "ArrowLeft") {
@@ -203,10 +222,22 @@ export default function LevelUpModal({ choices, onPick }: Props) {
             );
           })}
         </div>
+        <button className="btn ghost levelup-tree-toggle" onClick={() => setShowTree(true)}>
+          <Sigil name="star4" className="tree-toggle-ico" /> 系統樹を視る <kbd>Tab</kbd>
+        </button>
         <div className="levelup-hint" aria-hidden="true">
-          <kbd>A</kbd><kbd>D</kbd> 選ぶ　<kbd>Enter</kbd>/<kbd>Space</kbd> 決定　<kbd>1</kbd>–<kbd>3</kbd> 直接選択
+          <kbd>A</kbd><kbd>D</kbd> 選ぶ　<kbd>Enter</kbd>/<kbd>Space</kbd> 決定　<kbd>1</kbd>–<kbd>3</kbd> 直接選択　<kbd>Tab</kbd> 系統樹
         </div>
       </div>
+
+      {showTree && (
+        <SkillTree
+          weapons={hud?.weapons ?? []}
+          passives={hud?.passives ?? []}
+          skinId={skinId}
+          onClose={() => setShowTree(false)}
+        />
+      )}
     </div>
   );
 }
