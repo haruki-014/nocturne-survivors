@@ -36,7 +36,9 @@ const TIMER_MS = 50; // スケジューラのタイマー間隔
 
 // 効果音の最短再生間隔(秒)。高頻度の cue が音割れ/うるささにならないよう間引く。
 const SFX_MIN_GAP: Record<SfxCue, number> = {
-  attack: 0.06, hit: 0.08, kill: 0.05, pickup: 0.05, dodge: 0.18,
+  atkBolt: 0.05, atkKnife: 0.04, atkBoomerang: 0.09, atkLightning: 0.1,
+  atkFrost: 0.08, atkRoyal: 0.12, atkGold: 0.06, atkVoid: 0.06, atkPlague: 0.06, atkCrimson: 0.09,
+  hit: 0.08, kill: 0.05, pickup: 0.05, dodge: 0.18,
   boss: 0.5, levelup: 0.2, gameover: 0.5, victory: 0.5, select: 0.05,
 };
 
@@ -144,7 +146,16 @@ export class WebAudioPlayer implements AudioSink {
     if (t - last < SFX_MIN_GAP[name]) return; // レート制限
     this.lastCueAt[name] = t;
     switch (name) {
-      case "attack": this.sfxAttack(t); break;
+      case "atkBolt": this.sfxBolt(t); break;
+      case "atkKnife": this.sfxKnife(t); break;
+      case "atkBoomerang": this.sfxBoomerang(t); break;
+      case "atkLightning": this.sfxLightning(t); break;
+      case "atkFrost": this.sfxFrost(t); break;
+      case "atkRoyal": this.sfxRoyal(t); break;
+      case "atkGold": this.sfxGold(t); break;
+      case "atkVoid": this.sfxVoid(t); break;
+      case "atkPlague": this.sfxPlague(t); break;
+      case "atkCrimson": this.sfxCrimson(t); break;
       case "hit": this.sfxHit(t); break;
       case "kill": this.sfxKill(t); break;
       case "pickup": this.sfxPickup(t); break;
@@ -207,10 +218,64 @@ export class WebAudioPlayer implements AudioSink {
     notes.forEach((m, i) => this.tone(t + i * gap, { freq: mtof(m), type, dur: gap * 2.2, peak, attack: 0.01 }));
   }
 
-  // 武器の発射: 高く短い電子的な「ピッ」(上ずり)。被弾と対比させ、軽く明瞭に。
-  //   高音域・square・極短・上方向スライド → 「放つ」感。低音や下降は持たせない。
-  private sfxAttack(t: number): void {
-    this.tone(t, { freq: mtof(96), type: "square", dur: 0.055, peak: 0.035, slideTo: mtof(103), attack: 0.002 });
+  // ── 攻撃音(武器ごとに固有) ──
+  // 魔弾(基底/魔法): 鈴のように澄んだ「きらめき」。基音＋オクターブ上＋第5倍音を
+  //   薄く重ね、上方向へ滑らせて残響に乗せる → 詠唱を放つ魔法らしさ。被弾(低い濁り)と対極。
+  private sfxBolt(t: number): void {
+    this.tone(t, { freq: mtof(88), type: "sine", dur: 0.17, peak: 0.05, slideTo: mtof(95), attack: 0.004 });
+    this.tone(t, { freq: mtof(100), type: "triangle", dur: 0.13, peak: 0.025, slideTo: mtof(107), attack: 0.004 });
+    this.tone(t + 0.03, { freq: mtof(92) * 1.5, type: "sine", dur: 0.1, peak: 0.018, attack: 0.005 });
+  }
+  // 銀のナイフ: 高い刃鳴り＋微かなチッ
+  private sfxKnife(t: number): void {
+    this.tone(t, { freq: mtof(101), type: "triangle", dur: 0.08, peak: 0.04, slideTo: mtof(96), attack: 0.002 });
+    this.noise(t, { dur: 0.05, peak: 0.035, type: "highpass", freq: 5200 });
+  }
+  // 帰刃: 弧を描く風切り＋軽い回転音
+  private sfxBoomerang(t: number): void {
+    this.noise(t, { dur: 0.2, peak: 0.06, type: "bandpass", freq: 600, q: 0.6, sweepTo: 1500 });
+    this.tone(t, { freq: mtof(72), type: "triangle", dur: 0.12, peak: 0.03, slideTo: mtof(67) });
+  }
+  // 裁きの雷: 鋭い破裂＋落雷のザップ＋低い轟き
+  private sfxLightning(t: number): void {
+    this.noise(t, { dur: 0.14, peak: 0.14, type: "highpass", freq: 2600, sweepTo: 5200 });
+    this.tone(t, { freq: 1200, type: "sawtooth", dur: 0.1, peak: 0.06, slideTo: 220 });
+    this.tone(t + 0.02, { freq: 90, type: "sine", dur: 0.24, peak: 0.07, slideTo: 48 });
+  }
+  // 氷牙の連弾(固有): ガラスの鈴(微デチューンで結晶感)＋氷の擦過
+  private sfxFrost(t: number): void {
+    this.tone(t, { freq: mtof(103), type: "sine", dur: 0.2, peak: 0.045, slideTo: mtof(108), attack: 0.003 });
+    this.tone(t, { freq: mtof(110) * 1.006, type: "sine", dur: 0.17, peak: 0.025, attack: 0.003 });
+    this.noise(t, { dur: 0.1, peak: 0.05, type: "bandpass", freq: 6200, q: 3, sweepTo: 8200 });
+  }
+  // 王権の雷霆(固有): 荘厳な雷。低い五度の唸り＋鋭い破裂＋深い轟き
+  private sfxRoyal(t: number): void {
+    this.noise(t, { dur: 0.16, peak: 0.12, type: "highpass", freq: 1800, sweepTo: 3600 });
+    this.tone(t, { freq: mtof(60), type: "sawtooth", dur: 0.3, peak: 0.08, slideTo: mtof(48) });
+    this.tone(t, { freq: mtof(67), type: "sawtooth", dur: 0.28, peak: 0.05, slideTo: mtof(55) });
+    this.tone(t + 0.02, { freq: 55, type: "sine", dur: 0.34, peak: 0.08, slideTo: 40 });
+  }
+  // 黄金の聖句(固有): 上行する長三和音の聖なる鐘
+  private sfxGold(t: number): void {
+    this.tone(t, { freq: mtof(76), type: "triangle", dur: 0.26, peak: 0.04, attack: 0.004 });
+    this.tone(t + 0.02, { freq: mtof(80), type: "triangle", dur: 0.24, peak: 0.034, attack: 0.004 });
+    this.tone(t + 0.04, { freq: mtof(83), type: "sine", dur: 0.3, peak: 0.028, attack: 0.004 });
+  }
+  // 虚無の鎖環(固有): 暗い斬撃＋不穏なデチューンの低音
+  private sfxVoid(t: number): void {
+    this.noise(t, { dur: 0.16, peak: 0.07, type: "bandpass", freq: 1200, q: 0.8, sweepTo: 320 });
+    this.tone(t, { freq: mtof(58), type: "sawtooth", dur: 0.18, peak: 0.06, slideTo: mtof(50) });
+    this.tone(t, { freq: mtof(58) * 1.06, type: "sawtooth", dur: 0.16, peak: 0.03 });
+  }
+  // 疫癘の散弾(固有): 毒の噴霧(濁ったノイズ)＋揺らぐ濁音
+  private sfxPlague(t: number): void {
+    this.noise(t, { dur: 0.2, peak: 0.07, type: "bandpass", freq: 1800, q: 1.5, sweepTo: 900 });
+    this.tone(t, { freq: mtof(70), type: "sawtooth", dur: 0.16, peak: 0.03, slideTo: mtof(66) });
+  }
+  // 緋月の戦鎌(固有): 薙ぐ血の一閃(風切り)＋重い低音
+  private sfxCrimson(t: number): void {
+    this.noise(t, { dur: 0.22, peak: 0.09, type: "bandpass", freq: 700, q: 0.7, sweepTo: 1800 });
+    this.tone(t, { freq: mtof(50), type: "sawtooth", dur: 0.2, peak: 0.05, slideTo: mtof(43) });
   }
   // 被弾: 低くざらつく重い衝撃(下降)。攻撃音と被らないよう音域・音色・動きを真逆に。
   //   低音域・sawtooth の唸り＋深いサイン＋低ノイズ・やや長め・下方向 → 「喰らった」感。

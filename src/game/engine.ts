@@ -70,6 +70,7 @@ import type {
   Renderer,
   SchoolId,
   Settings,
+  SfxCue,
   UpgradeChoice,
   WeaponDef,
   WeaponId,
@@ -117,6 +118,19 @@ const ROLL_IFRAME = 0.38; // 無敵時間(動作より少し長く)
 const ROLL_SPEED = 2.7; // 通常移動速度に対する倍率
 
 type PauseReason = "none" | "menu" | "levelup" | "ended";
+
+// 武器ごとの発射音を選ぶ。固有技(fx 付き)は専用音、基底は挙動別の音。
+//   orbs/aura は連続発動で発射ディスパッチを通らないため対象外。
+const FX_SFX: Partial<Record<ProjectileFx, SfxCue>> = {
+  frost: "atkFrost", royal: "atkRoyal", gold: "atkGold",
+  void: "atkVoid", plague: "atkPlague", crimson: "atkCrimson",
+};
+const BEHAVIOR_SFX: Partial<Record<WeaponDef["behavior"], SfxCue>> = {
+  bolt: "atkBolt", knife: "atkKnife", boomerang: "atkBoomerang", lightning: "atkLightning",
+};
+function weaponSfx(def: WeaponDef): SfxCue {
+  return (def.fx && FX_SFX[def.fx]) || BEHAVIOR_SFX[def.behavior] || "atkBolt";
+}
 
 export class Engine {
   private renderer: Renderer;
@@ -650,7 +664,7 @@ export class Engine {
         case "boomerang": this.fireBoomerang(amount, stp, d.might, d.area, vis); break;
         case "lightning": this.fireLightning(amount, stp, d.might, d.area, vis); break;
       }
-      this.audio?.cue("attack"); // 発射音(クールダウン毎=自然に間引かれる。重複は player 側で更に制限)
+      this.audio?.cue(weaponSfx(def)); // 攻撃ごとに固有の発射音(クールダウン毎=自然に間引かれる)
     }
   }
 

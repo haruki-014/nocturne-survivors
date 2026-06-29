@@ -465,7 +465,17 @@ export interface Settings {
 
 /** 単発の効果音キュー。エンジン/UI が鳴らしたい瞬間に名前で要求する。 */
 export type SfxCue =
-  | "attack" // 武器の発射(魔弾/刃/帰刃/雷)
+  // 武器の発射(攻撃ごとに固有の音色)。基底=挙動別、固有技=fx 別。
+  | "atkBolt" // 魔弾(魔法のきらめき)
+  | "atkKnife" // 銀のナイフ(刃鳴り)
+  | "atkBoomerang" // 帰刃(風切り)
+  | "atkLightning" // 裁きの雷(落雷)
+  | "atkFrost" // 氷牙の連弾(氷晶)
+  | "atkRoyal" // 王権の雷霆(荘厳な雷)
+  | "atkGold" // 黄金の聖句(聖なる鐘)
+  | "atkVoid" // 虚無の鎖環(虚空の斬撃)
+  | "atkPlague" // 疫癘の散弾(毒の噴霧)
+  | "atkCrimson" // 緋月の戦鎌(血の一閃)
   | "hit" // 自機の被弾
   | "kill" // 敵の撃破
   | "pickup" // 道具(回復/磁石/遺物/戦利品)の取得
