@@ -207,14 +207,17 @@ export class WebAudioPlayer implements AudioSink {
     notes.forEach((m, i) => this.tone(t + i * gap, { freq: mtof(m), type, dur: gap * 2.2, peak, attack: 0.01 }));
   }
 
-  // 武器の発射: 短い下降の煌めき(控えめ・高頻度)
+  // 武器の発射: 高く短い電子的な「ピッ」(上ずり)。被弾と対比させ、軽く明瞭に。
+  //   高音域・square・極短・上方向スライド → 「放つ」感。低音や下降は持たせない。
   private sfxAttack(t: number): void {
-    this.tone(t, { freq: mtof(84), type: "triangle", dur: 0.11, peak: 0.05, slideTo: mtof(72), attack: 0.003 });
+    this.tone(t, { freq: mtof(96), type: "square", dur: 0.055, peak: 0.035, slideTo: mtof(103), attack: 0.002 });
   }
-  // 被弾: 低い衝撃(ノイズ＋低音)。やや強めに危険を伝える
+  // 被弾: 低くざらつく重い衝撃(下降)。攻撃音と被らないよう音域・音色・動きを真逆に。
+  //   低音域・sawtooth の唸り＋深いサイン＋低ノイズ・やや長め・下方向 → 「喰らった」感。
   private sfxHit(t: number): void {
-    this.noise(t, { dur: 0.18, peak: 0.16, type: "lowpass", freq: 900, sweepTo: 180 });
-    this.tone(t, { freq: 150, type: "sine", dur: 0.18, peak: 0.12, slideTo: 70 });
+    this.noise(t, { dur: 0.26, peak: 0.17, type: "lowpass", freq: 640, q: 0.7, sweepTo: 110 });
+    this.tone(t, { freq: 210, type: "sawtooth", dur: 0.26, peak: 0.13, slideTo: 52 }); // ざらつく呻り
+    this.tone(t + 0.01, { freq: 95, type: "sine", dur: 0.22, peak: 0.12, slideTo: 44 }); // 深い芯
   }
   // 撃破: 乾いた弾けと小さな低音の落ち
   private sfxKill(t: number): void {

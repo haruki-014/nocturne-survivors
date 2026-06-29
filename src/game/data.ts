@@ -531,7 +531,8 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
   warlock: { kind: "warlock", name: "夜術師", hp: 42, speed: 60, damage: 10, radius: 11, xp: 7, color: "#b06be0" },
   elite: { kind: "elite", name: "黄金の巨躯", hp: 1600, speed: 50, damage: 26, radius: 24, xp: 48, color: "#e8b54d" },
   // boss は「基準値」。実際の各ボスは下の BOSSES が倍率で味付けする。
-  boss: { kind: "boss", name: "夜の主", hp: 6000, speed: 76, damage: 32, radius: 30, xp: 300, color: "#ff3d54" },
+  //   hp 基準を 6000→15000(2.5倍)に増強(柔らか過ぎた手応えを是正。各ボスの hpMul 差は維持)。
+  boss: { kind: "boss", name: "夜の主", hp: 15000, speed: 76, damage: 32, radius: 30, xp: 300, color: "#ff3d54" },
 };
 
 // ------------------------------------------------------------
