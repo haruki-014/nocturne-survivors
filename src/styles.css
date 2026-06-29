@@ -506,12 +506,18 @@ button {
 .controls-hint {
   margin-top: 18px;
   display: flex;
-  gap: 18px;
+  flex-wrap: wrap; /* 入りきらない時は項目ごと折り返す(語の途中では折らない) */
+  gap: 8px 18px;
   justify-content: center;
   font-family: var(--font-mono);
   font-size: 11.5px;
   color: var(--bone-dim);
   letter-spacing: 0.06em;
+}
+
+/* 各ヒントは1かたまり(キー＋語)として扱い、内部改行(「移/動」等)を防ぐ */
+.controls-hint span {
+  white-space: nowrap;
 }
 
 .controls-hint kbd {
@@ -693,7 +699,9 @@ input[type="range"] {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* 収まる時は中央寄せ、縦に溢れる時は上寄せ(safe)にしてロゴ上端を切らさない。
+     溢れたぶんは .overlay.title-overlay の overflow-y:auto でスクロールできる。 */
+  justify-content: safe center;
   text-align: center;
   gap: 6px;
   /* 下端はタスクバーヒーロー(86px)を避ける */
@@ -751,6 +759,20 @@ input[type="range"] {
   .title-brand .title-tagline { text-align: left; }
   .title-scene .btn-col .home-stats { justify-content: flex-start; }
   .title-scene .btn-col .controls-hint { justify-content: flex-start; }
+}
+
+/* ── 縦が低い画面: 各要素を引き締めて、一定サイズまで切れずに収める ── */
+@media (max-height: 760px) {
+  .title-scene { gap: 2px; padding-top: 22px; padding-bottom: 96px; }
+  .title-logo-en { font-size: clamp(42px, 8vw, 76px); }
+  .title-logo-jp { margin-top: 8px; }
+  .ornament { margin-top: 12px; }
+  .title-tagline { margin-top: 12px; line-height: 1.7; }
+  .btn-col { gap: 9px; margin-top: 16px; }
+  .btn-col > .btn { padding-top: 10px; padding-bottom: 10px; }
+  .home-stats { gap: 6px; }
+  .home-stats span { min-width: 64px; padding: 6px 9px 5px; }
+  .controls-hint { margin-top: 12px; }
 }
 
 /* 緋く灯る大ロゴ。微かに呼吸する */
