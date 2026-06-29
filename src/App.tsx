@@ -35,6 +35,7 @@ import CodexScreen from "./ui/CodexScreen";
 import ModeSelect from "./ui/ModeSelect";
 import AltarScreen from "./ui/AltarScreen";
 import TreasuryScreen from "./ui/TreasuryScreen";
+import { isFullscreen, lockEscape, toggleFullscreen } from "./ui/fullscreen";
 import {
   collectCurio,
   loadProfile,
@@ -88,6 +89,7 @@ export default function App() {
   const [unlockedSkins, setUnlockedSkins] = useState<string[]>([]);
   const [soulsEarned, setSoulsEarned] = useState(0);
   const [currentMode, setCurrentMode] = useState<GameMode>(DEFAULT_MODE);
+  const [fullscreen, setFullscreen] = useState(false);
 
   // screen の最新値をイベントハンドラから参照するための ref
   const screenRef = useRef(screen);
@@ -188,9 +190,15 @@ export default function App() {
     setProfile((prev) => syncHero(prev, live));
   }, []);
 
-  // ---- Esc でポーズのトグル ----
+  // ---- Esc でポーズのトグル / F で全画面のトグル ----
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // F: 全画面の切替(全画面入場時に Esc を捕捉=解除でなく中断に使える)
+      if (e.code === "KeyF" && !e.repeat) {
+        e.preventDefault();
+        void toggleFullscreen();
+        return;
+      }
       if (e.code !== "Escape" && e.code !== "KeyP") return;
       const s = screenRef.current;
       const engine = engineRef.current;
@@ -205,6 +213,16 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // ---- 全画面の状態を追従し、(再)入場時に Esc 捕捉を張り直す ----
+  useEffect(() => {
+    const onFsChange = () => {
+      setFullscreen(isFullscreen());
+      void lockEscape(); // 全画面に入った直後は Esc をページ側へロック(解除されない)
+    };
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
   }, []);
 
   // ---- 操作ハンドラ ----
@@ -326,6 +344,8 @@ export default function App() {
           onSettings={setSettings}
           onResume={resume}
           onQuit={quitToTitle}
+          fullscreen={fullscreen}
+          onToggleFullscreen={() => void toggleFullscreen()}
         />
       )}
 

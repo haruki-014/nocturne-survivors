@@ -150,6 +150,9 @@ export default function TitleScreen({ onStart, onCodex, onAltar, onTreasury, pro
             <span>
               <kbd>Esc</kbd> 休息
             </span>
+            <span>
+              <kbd>F</kbd> 全画面
+            </span>
           </div>
         </div>
 

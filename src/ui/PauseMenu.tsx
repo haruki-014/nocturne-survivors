@@ -85,9 +85,11 @@ interface Props {
   onSettings: (s: Settings) => void;
   onResume: () => void;
   onQuit: () => void;
+  fullscreen: boolean;
+  onToggleFullscreen: () => void;
 }
 
-export default function PauseMenu({ hud, settings, onSettings, onResume, onQuit }: Props) {
+export default function PauseMenu({ hud, settings, onSettings, onResume, onQuit, fullscreen, onToggleFullscreen }: Props) {
   return (
     <div className="overlay dim">
       <div className="panel" role="dialog" aria-label="休息">
@@ -106,6 +108,11 @@ export default function PauseMenu({ hud, settings, onSettings, onResume, onQuit 
         {hud && <Crests schools={hud.schools} />}
 
         <div className="settings">
+          <Toggle
+            label="全画面(Esc は中断・F で切替)"
+            checked={fullscreen}
+            onChange={onToggleFullscreen}
+          />
           <Toggle
             label="ダメージ数字を表示"
             checked={settings.damageNumbers}
