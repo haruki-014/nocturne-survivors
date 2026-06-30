@@ -2704,22 +2704,141 @@ input[type="range"] {
 .skt-sub { text-align: center; font-size: 12px; color: var(--bone-dim); margin: 6px 0 16px; }
 .skt-empty { text-align: center; color: var(--bone-dim); padding: 28px 8px; }
 
-.skt-rows { display: flex; flex-direction: column; gap: 9px; }
+/* 系統樹の森(各系統を縦に積む) */
+.skt-forest { display: flex; flex-direction: column; gap: 22px; }
 
-/* 1系統の行(基底 ＋ 加護 ▶ 真化)。状態で格を出し分ける。 */
-.skt-row {
+/* 1系統 = 1本の縦の系統樹(幹 → 幹線 → 枝)。中央寄せで上から下へ育つ。 */
+.skt-system {
   --accent: var(--gold);
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
+}
+
+/* 幹: 基底武器カード(見出し＋段階ラダー) */
+.skt-trunk {
+  width: min(440px, 100%);
+  padding: 12px 16px 14px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 10%, transparent), transparent 40%), var(--glass-fill);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--glass-edge));
+  box-shadow: 0 1px 0 var(--glass-rim) inset, 0 6px 18px rgba(0, 0, 0, 0.42);
+}
+.skt-trunk-head { display: flex; align-items: center; gap: 10px; }
+
+.skt-stages-label {
+  margin: 12px 0 7px;
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  text-align: center;
+  color: var(--bone-dim);
+}
+.skt-stages-label::before,
+.skt-stages-label::after { content: "── "; opacity: 0.5; }
+.skt-stages-label::after { content: " ──"; }
+
+/* 段階ラダー: 各レベルで伸びる効果 */
+.skt-stages { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.skt-stage {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  border-left: 2px solid var(--panel-edge);
+}
+.skt-stage-lv {
+  flex: none;
+  width: 34px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--bone-dim);
+}
+.skt-stage-text { font-size: 11px; color: var(--bone-dim); min-width: 0; }
+.skt-stage-tag {
+  margin-left: auto;
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: var(--gold);
+}
+/* 修得済み: 点灯。次の一段: アクセントの脈で「ここが次」を示す。未到達: 減光。 */
+.skt-stage.is-done { border-left-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+.skt-stage.is-done .skt-stage-lv { color: color-mix(in srgb, var(--accent) 70%, var(--bone)); }
+.skt-stage.is-done .skt-stage-text { color: var(--bone); }
+.skt-stage.is-next {
+  border-left-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 12%, transparent);
+}
+.skt-stage.is-next .skt-stage-lv { color: var(--gold); }
+.skt-stage.is-next .skt-stage-text { color: var(--bone); }
+.skt-stage.is-future { opacity: 0.62; }
+/* 質的変化(数/貫通/範囲)の段は金のドットで印を付ける */
+.skt-stage.is-milestone .skt-stage-lv::before {
+  content: "◆ ";
+  color: var(--gold);
+  font-size: 8px;
+}
+.skt-stage.is-last .skt-stage-text { font-weight: 700; color: color-mix(in srgb, var(--accent) 60%, var(--bone)); }
+
+/* 幹 → 枝へ伸びる金の幹線 */
+.skt-link {
+  width: 2px;
+  height: 24px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 70%, transparent), var(--gold));
+  box-shadow: 0 0 6px rgba(217, 164, 65, 0.4);
+}
+
+/* 枝の並び。複数なら横の分岐バスで系統樹らしく見せる。 */
+.skt-branches { display: flex; justify-content: center; align-items: flex-start; gap: 16px; }
+.skt-branch {
+  --accent: var(--gold);
+  position: relative;
+  padding-top: 22px;
+  flex: 0 1 220px;
+  min-width: 0;
+}
+/* 各枝へ落ちる縦ドロップ線 */
+.skt-branch::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 2px;
+  height: 22px;
+  background: linear-gradient(180deg, var(--gold), color-mix(in srgb, var(--accent) 70%, transparent));
+}
+/* 分岐バス(枝の頭をつなぐ横線)。端の枝で外側を切る。 */
+.skt-branch::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--gold);
+  box-shadow: 0 0 6px rgba(217, 164, 65, 0.35);
+}
+.skt-branch:first-child::after { left: 50%; border-top-left-radius: 2px; }
+.skt-branch:last-child::after { right: 50%; border-top-right-radius: 2px; }
+.skt-branch:only-child::after { display: none; }
+
+/* 真化先カード。状態で格を出し分ける。 */
+.skt-evo-card {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 11px 13px;
   border-radius: 13px;
   background: var(--glass-fill);
   border: 1px solid var(--glass-edge);
   box-shadow: 0 1px 0 var(--glass-rim) inset, 0 6px 16px rgba(0, 0, 0, 0.4);
 }
-.skt-row.is-growing { filter: grayscale(0.45); opacity: 0.84; }
-.skt-row.is-ready {
+.skt-branch.is-growing .skt-evo-card { filter: grayscale(0.45); opacity: 0.84; }
+.skt-branch.is-ready .skt-evo-card {
   border-color: color-mix(in srgb, var(--gold) 60%, var(--glass-edge));
   box-shadow: 0 1px 0 var(--glass-rim) inset, 0 0 26px rgba(217, 164, 65, 0.32);
   animation: skt-ready-pulse 2.2s ease-in-out infinite;
@@ -2728,13 +2847,31 @@ input[type="range"] {
   0%, 100% { box-shadow: 0 1px 0 var(--glass-rim) inset, 0 0 18px rgba(217, 164, 65, 0.22); }
   50% { box-shadow: 0 1px 0 var(--glass-rim) inset, 0 0 32px rgba(217, 164, 65, 0.45); }
 }
-.skt-row.is-done {
+.skt-branch.is-done .skt-evo-card {
   border-color: color-mix(in srgb, var(--accent) 55%, var(--glass-edge));
   box-shadow: 0 1px 0 var(--glass-rim) inset, 0 0 22px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
-.skt-node { display: inline-flex; align-items: center; gap: 8px; }
-.skt-evo { flex: 1; }
+/* 必要加護 chip(所持で点灯 / 未所持で減光) */
+.skt-reqchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 9px 4px 4px;
+  border-radius: 999px;
+  background: var(--glass-fill-deep);
+  border: 1px solid var(--glass-edge);
+  opacity: 0.55;
+  filter: grayscale(0.55);
+}
+.skt-reqchip.on { opacity: 1; filter: none; }
+.skt-reqchip .skt-medallion { color: var(--gold); border-color: color-mix(in srgb, var(--gold) 50%, var(--glass-edge)); background: radial-gradient(circle at 50% 38%, rgba(217, 164, 65, 0.22), rgba(10, 6, 18, 0.5) 74%); }
+.skt-reqchip-body { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.skt-reqchip-name { font-family: var(--font-display-jp); font-weight: 700; font-size: 11px; color: var(--bone); white-space: nowrap; }
+
+.skt-evo-head { display: flex; align-items: center; gap: 9px; }
+.skt-evo-desc { margin: 0; font-size: 11px; line-height: 1.5; color: var(--bone-dim); }
+
 .skt-node-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .skt-name { font-family: var(--font-display-jp); font-weight: 700; font-size: 13px; color: var(--bone); white-space: nowrap; }
 .skt-name.evo { color: color-mix(in srgb, var(--accent) 72%, var(--bone)); }
@@ -2745,8 +2882,8 @@ input[type="range"] {
   letter-spacing: 0.08em;
   color: var(--accent);
 }
-.skt-row.is-ready .skt-badge { color: var(--gold); }
-.skt-row.is-growing .skt-badge { color: var(--bone-dim); }
+.skt-branch.is-ready .skt-badge { color: var(--gold); }
+.skt-branch.is-growing .skt-badge { color: var(--bone-dim); }
 
 /* シジルのメダリオン */
 .skt-medallion {
@@ -2764,14 +2901,6 @@ input[type="range"] {
 .skt-medallion.sm { width: 30px; height: 30px; }
 .skt-medallion.sm svg { width: 16px; height: 16px; }
 .skt-medallion.big { box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 32%, transparent); }
-
-/* 必要加護: 所持で点灯、未所持は減光 */
-.skt-req { opacity: 0.5; filter: grayscale(0.6); }
-.skt-req.on { opacity: 1; filter: none; }
-.skt-req .skt-medallion { color: var(--gold); border-color: color-mix(in srgb, var(--gold) 50%, var(--glass-edge)); background: radial-gradient(circle at 50% 38%, rgba(217, 164, 65, 0.22), rgba(10, 6, 18, 0.5) 74%); }
-
-.skt-plus { color: var(--bone-dim); font-size: 12px; }
-.skt-arrow { color: var(--gold); filter: drop-shadow(0 0 6px rgba(217, 164, 65, 0.5)); }
 
 /* レベルピップ */
 .skt-pips { display: inline-flex; gap: 3px; margin-top: 2px; }
@@ -2792,5 +2921,5 @@ input[type="range"] {
 
 @media (prefers-reduced-motion: reduce) {
   .skilltree-overlay { animation: none; }
-  .skt-row.is-ready { animation: none; }
+  .skt-branch.is-ready .skt-evo-card { animation: none; }
 }
