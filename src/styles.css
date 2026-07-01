@@ -2757,51 +2757,62 @@ input[type="range"] {
   box-shadow: 0 1px 0 var(--glass-rim) inset, 0 6px 18px rgba(0, 0, 0, 0.42);
 }
 
-/* 段階ラダー: 各レベルで伸びる効果(最大Lvが上=上へ伸びる) */
-.skt-stages { list-style: none; margin: 0; padding: 0; width: 100%; display: flex; flex-direction: column; gap: 2px; }
+/* 段階ラダー: 質的に変わる節目(数/貫通/範囲)＋真化解放だけ。最大Lvが上=上へ伸びる。
+   高さは全系統で最大行数(--maxrows)に合わせて確保し、根=下端/真化先=上端を整列させる。 */
+.skt-stages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 3px;
+  min-height: calc(var(--maxrows, 1) * 25px);
+}
 .skt-stage {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 2px 8px;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 7px;
   border-radius: 8px;
   border-left: 2px solid var(--panel-edge);
+  white-space: nowrap;
 }
 .skt-stage-lv {
   flex: none;
-  width: 34px;
+  width: 30px;
   font-family: var(--font-mono);
   font-size: 10px;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   color: var(--bone-dim);
 }
-.skt-stage-text { font-size: 11px; color: var(--bone-dim); min-width: 0; }
-.skt-stage-tag {
-  margin-left: auto;
-  flex: none;
+.skt-stage-badges { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+/* 節目のミニバッジ(例: 数+1 / 貫+2 / 範+5%) */
+.skt-bdg {
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.06em;
-  color: var(--gold);
+  font-size: 10px;
+  line-height: 1.5;
+  padding: 0 6px;
+  border-radius: 6px;
+  color: color-mix(in srgb, var(--accent) 70%, var(--bone));
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--glass-edge));
 }
-/* 修得済み: 点灯。次の一段: アクセントの脈で「ここが次」を示す。未到達: 減光。 */
+.skt-bdg.gold {
+  color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 16%, transparent);
+  border-color: color-mix(in srgb, var(--gold) 40%, var(--glass-edge));
+}
+/* 修得済み: 点灯。次の一段: 金で「ここが次」を示す。未到達: 減光。 */
 .skt-stage.is-done { border-left-color: color-mix(in srgb, var(--accent) 60%, transparent); }
 .skt-stage.is-done .skt-stage-lv { color: color-mix(in srgb, var(--accent) 70%, var(--bone)); }
-.skt-stage.is-done .skt-stage-text { color: var(--bone); }
 .skt-stage.is-next {
   border-left-color: var(--gold);
-  background: color-mix(in srgb, var(--gold) 12%, transparent);
+  background: color-mix(in srgb, var(--gold) 10%, transparent);
 }
 .skt-stage.is-next .skt-stage-lv { color: var(--gold); }
-.skt-stage.is-next .skt-stage-text { color: var(--bone); }
-.skt-stage.is-future { opacity: 0.62; }
-/* 質的変化(数/貫通/範囲)の段は金のドットで印を付ける */
-.skt-stage.is-milestone .skt-stage-lv::before {
-  content: "◆ ";
-  color: var(--gold);
-  font-size: 8px;
-}
-.skt-stage.is-last .skt-stage-text { font-weight: 700; color: color-mix(in srgb, var(--accent) 60%, var(--bone)); }
+.skt-stage.is-future { opacity: 0.58; }
 
 /* 段階(根)→ 枝へ伸びる金の幹線。枝群の下と段階の上をつなぐ。 */
 .skt-link {
@@ -2845,13 +2856,15 @@ input[type="range"] {
 .skt-branch:last-child::after { right: 50%; border-bottom-right-radius: 2px; }
 .skt-branch:only-child::after { display: none; }
 
-/* 真化先カード。状態で格を出し分ける。 */
+/* 真化先カード(コンパクト縦型: 名＋状態＋必要加護だけ)。状態で格を出し分ける。 */
 .skt-evo-card {
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  padding: 11px 13px;
-  border-radius: 13px;
+  align-items: center;
+  text-align: center;
+  gap: 5px;
+  padding: 10px 8px;
+  border-radius: 12px;
   background: var(--glass-fill);
   border: 1px solid var(--glass-edge);
   box-shadow: 0 1px 0 var(--glass-rim) inset, 0 6px 16px rgba(0, 0, 0, 0.4);
@@ -2871,29 +2884,43 @@ input[type="range"] {
   box-shadow: 0 1px 0 var(--glass-rim) inset, 0 0 22px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
-/* 必要加護 chip(所持で点灯 / 未所持で減光) */
+/* 必要加護 chip(所持で点灯 / 未所持で減光)。「要」のラベル＋加護名のみ。 */
 .skt-reqchip {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 4px 9px 4px 4px;
+  gap: 6px;
+  padding: 3px 9px 3px 3px;
   border-radius: 999px;
   background: var(--glass-fill-deep);
   border: 1px solid var(--glass-edge);
-  opacity: 0.55;
+  opacity: 0.5;
   filter: grayscale(0.55);
 }
 .skt-reqchip.on { opacity: 1; filter: none; }
+.skt-reqchip::after {
+  content: "要";
+  order: -1;
+  margin-left: 6px;
+  font-size: 8px;
+  color: var(--bone-dim);
+}
+.skt-reqchip.on::after { content: "✓"; color: var(--gold); }
 .skt-reqchip .skt-medallion { color: var(--gold); border-color: color-mix(in srgb, var(--gold) 50%, var(--glass-edge)); background: radial-gradient(circle at 50% 38%, rgba(217, 164, 65, 0.22), rgba(10, 6, 18, 0.5) 74%); }
-.skt-reqchip-body { display: flex; flex-direction: column; gap: 0; min-width: 0; }
 .skt-reqchip-name { font-family: var(--font-display-jp); font-weight: 700; font-size: 11px; color: var(--bone); white-space: nowrap; }
 
-.skt-evo-head { display: flex; align-items: center; gap: 9px; }
-.skt-evo-desc { margin: 0; font-size: 11px; line-height: 1.5; color: var(--bone-dim); }
+/* 根の右肩: 毎レベルの威力伸び(要約一言) */
+.skt-grow {
+  margin-left: auto;
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: color-mix(in srgb, var(--accent) 72%, var(--bone));
+}
+.skt-grow i { font-style: normal; font-size: 8px; color: var(--bone-dim); }
 
 .skt-node-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .skt-name { font-family: var(--font-display-jp); font-weight: 700; font-size: 13px; color: var(--bone); white-space: nowrap; }
-.skt-name.evo { color: color-mix(in srgb, var(--accent) 72%, var(--bone)); }
+.skt-name.evo { font-size: 12px; line-height: 1.25; white-space: normal; color: color-mix(in srgb, var(--accent) 72%, var(--bone)); }
 .skt-foot { font-size: 10px; color: var(--bone-dim); }
 .skt-badge {
   font-family: var(--font-mono);

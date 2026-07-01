@@ -1,22 +1,16 @@
 // 〔層〕付属的な機能 / AUXILIARY ── 技の系統樹(スキル選択時の俯瞰オーバーレイ)
 //   役割: レベルアップ(アルカナ選択)の最中に開く、現在のビルドを反映した真化系統の図。
 //     所持スキルを画面下部に「横一列」で並べ、各スキルの系統樹を「上方向」へ伸ばす ──
-//     根(基底武器)から各レベルで伸びる効果を段階ラダーで上に積み、最上段で真化先カードへ枝分かれする。
-//     必要加護の所持や真化条件を色分けし、あと一歩で真化する枝を金に灯す。固有技(秘伝)も末尾に併記。
-//     判定・保存は持たず props を映すだけの表示専用。
-//   操作: 既定は一画面に全体を収める。所持スキルが多く横に溢れた時のみ A/D(←→)で横スクロール、
-//     背の高い樹は W/S(↑↓)で縦スクロール。Esc/Tab/背景クリックで閉じる(閉じるは親が司る)。
+//     根(基底武器)から、手応えが質的に変わる節目(数/貫通/範囲の伸び)だけを段階ラダーに積み、
+//     最上段で真化先カードへ枝分かれする。必要加護の所持や真化条件を色分けする。
+//     情報は要点に絞る: 毎レベルの威力伸びは根に一言、ラダーは節目のみ、真化先は名と条件だけ。
+//   操作: 既定は一画面に収める。溢れた時のみ A/D(←→)横スクロール、W/S(↑↓)縦スクロール。
+//     Esc/Tab/背景クリックで閉じる(閉じるは親が司る)。
 //   世界観: 図鑑の真化表示の語彙を引き継ぎ、リキッドグラス＋シジル＋金/血/骨で統一。
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { HudSlot, WeaponId } from "../game/types";
-import {
-  EVOLUTIONS,
-  PASSIVES,
-  SKINS_BY_ID,
-  WEAPONS,
-  describeWeaponUpgrade,
-} from "../game/data";
+import type { HudSlot, WeaponDef, WeaponId } from "../game/types";
+import { EVOLUTIONS, PASSIVES, SKINS_BY_ID, WEAPONS } from "../game/data";
 import { Sigil } from "./icons";
 
 interface Props {
@@ -27,11 +21,23 @@ interface Props {
 }
 
 type RowState = "done" | "ready" | "growing"; // 真化済み / 真化可能 / 育成中
-const BADGE: Record<RowState, string> = { done: "真化済み", ready: "真化可能", growing: "育成中" };
+const BADGE: Record<RowState, string> = { done: "真化済", ready: "真化可", growing: "育成中" };
 
 type StageStatus = "done" | "next" | "future"; // 修得済み / 次の一段 / 未到達
+interface Badge { k: string; v: string } // 例: { k:"数", v:"+1" }
 
 const SCROLL_STEP = 220; // キー1打ぶんのスクロール量(px)
+
+/** Lv(lv-1)→lv で質的に変わる節目(数/貫通/範囲)だけを抜き出す。威力等の数値伸びは根の要約に集約。 */
+function milestoneBadges(def: WeaponDef, lv: number): Badge[] {
+  const a = def.statsFor(lv - 1);
+  const b = def.statsFor(lv);
+  const out: Badge[] = [];
+  if (b.amount > a.amount) out.push({ k: "数", v: `+${b.amount - a.amount}` });
+  if (b.pierce > a.pierce && b.pierce < 900) out.push({ k: "貫", v: `+${b.pierce - a.pierce}` });
+  if (b.area > a.area) out.push({ k: "範", v: `+${Math.round((b.area / a.area - 1) * 100)}%` });
+  return out;
+}
 
 /** 小さなレベルピップ(x/max)。 */
 function Pips({ level, max }: { level: number; max: number }) {
@@ -61,24 +67,31 @@ export default function SkillTree({ weapons, passives, skinId, onClose }: Props)
         let state: RowState = "growing";
         if (evoOwned) state = "done";
         else if (baseSlot && baseSlot.level >= baseSlot.maxLevel && reqOwned) state = "ready";
-        return { key: branch.evo, evo, req, reqOwned, state, desc: branch.desc };
+        return { key: branch.evo, evo, req, reqOwned, state };
       });
       const inBuild = !!baseSlot || branches.some((b) => b.state === "done");
       if (!inBuild) return null;
 
-      // 各レベルで伸びる効果(段階ラダー)。Lv2..maxLevel の差分文を再利用。
       const curLv = baseSlot?.level ?? base.maxLevel; // 真化済みで基底が消えている場合は満了扱い
-      const stages = Array.from({ length: base.maxLevel - 1 }, (_, i) => {
-        const lv = i + 2;
-        const text = describeWeaponUpgrade(base, lv);
-        const milestone = /数|貫通|範囲/.test(text); // 質的に手応えが変わる段
+      // 毎レベルの威力伸び(要約)。一定でない場合も Lv1→2 を代表値に。
+      const dmgPerLv = Math.round(base.statsFor(2).damage - base.statsFor(1).damage);
+      // 段階ラダーは「節目(数/貫通/範囲が伸びる段)」と「最大Lv(真化解放)」だけに絞る。
+      const ladder = [];
+      for (let lv = 2; lv <= base.maxLevel; lv++) {
+        const badges = milestoneBadges(base, lv);
+        const last = lv === base.maxLevel;
+        if (badges.length === 0 && !last) continue;
         const status: StageStatus = lv <= curLv ? "done" : lv === curLv + 1 ? "next" : "future";
-        return { lv, text, milestone, status, last: lv === base.maxLevel };
-      });
+        ladder.push({ lv, badges, status, last });
+      }
+      ladder.reverse(); // 最大Lvを上に=上へ伸びる
 
-      return { baseId, base, baseSlot, curLv, stages, branches };
+      return { baseId, base, baseSlot, dmgPerLv, ladder, branches };
     })
     .filter((s): s is NonNullable<typeof s> => s !== null);
+
+  // ラダーの高さを全系統で揃える(根=下端 / 真化先=上端 がきれいに整列するように)
+  const maxRows = Math.max(1, ...systems.map((s) => s.ladder.length));
 
   // 固有技(装いの秘伝)
   const skin = SKINS_BY_ID[skinId];
@@ -86,7 +99,7 @@ export default function SkillTree({ weapons, passives, skinId, onClose }: Props)
   const sig = sigId ? WEAPONS[sigId] : undefined;
   const sigOwned = sigId ? ownedW.has(sigId) : false;
 
-  // 横溢れ時のみ A/D 横スクロールを許す。器(scrollRef)をキーで動かす。
+  // 横/縦に溢れた時のみキー操作を許す。器(scrollRef)をキーで動かす。
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollable, setScrollable] = useState<{ x: boolean; y: boolean }>({ x: false, y: false });
 
@@ -124,22 +137,47 @@ export default function SkillTree({ weapons, passives, skinId, onClose }: Props)
     return () => window.removeEventListener("keydown", onKey, true);
   }, []);
 
+  // 真化先カード(分岐1本ぶん)。説明文は持たず、名と状態と必要加護だけに絞る。
+  const EvoCard = ({
+    icon,
+    name,
+    badge,
+    req,
+  }: {
+    icon: string;
+    name: string;
+    badge: string;
+    req?: { icon: string; name: string; owned: boolean };
+  }) => (
+    <div className="skt-evo-card">
+      <span className="skt-medallion big"><Sigil name={icon} /></span>
+      <span className="skt-name evo">{name}</span>
+      <span className="skt-badge">{badge}</span>
+      {req && (
+        <div className={`skt-reqchip${req.owned ? " on" : ""}`} title={req.owned ? "所持" : "未所持"}>
+          <span className="skt-medallion sm"><Sigil name={req.icon} /></span>
+          <span className="skt-reqchip-name">{req.name}</span>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="skilltree-overlay" onClick={onClose}>
       <div className="skilltree" role="dialog" aria-label="技の系統" onClick={(e) => e.stopPropagation()}>
         <div className="skt-head">月 詠 の 系 統</div>
         <p className="skt-sub">
-          根は持つ技、上へ伸びるは真化の先 ── あと一歩で真化する枝は金に灯る
+          下が手持ち、上が真化の先 ── 金は真化目前
           {(scrollable.x || scrollable.y) && (
             <span className="skt-scrollhint">
-              {scrollable.x && <> 　<kbd>A</kbd><kbd>D</kbd> 横移動</>}
-              {scrollable.y && <> 　<kbd>W</kbd><kbd>S</kbd> 縦移動</>}
+              {scrollable.x && <> 　<kbd>A</kbd><kbd>D</kbd></>}
+              {scrollable.y && <> 　<kbd>W</kbd><kbd>S</kbd></>}
             </span>
           )}
         </p>
 
         <div className="skt-scroll" ref={scrollRef}>
-          <div className="skt-forest">
+          <div className="skt-forest" style={{ "--maxrows": maxRows } as React.CSSProperties}>
             {systems.length === 0 && !sig && (
               <p className="skt-empty">まだ系統は芽吹いていない。武器を手に取れ。</p>
             )}
@@ -155,25 +193,12 @@ export default function SkillTree({ weapons, passives, skinId, onClose }: Props)
                         className={`skt-branch is-${b.state}`}
                         style={{ "--accent": b.evo.color } as React.CSSProperties}
                       >
-                        <div className="skt-evo-card">
-                          <div className="skt-evo-head">
-                            <span className="skt-medallion big">
-                              <Sigil name={b.state === "growing" && !s.baseSlot ? "lock" : b.evo.icon} />
-                            </span>
-                            <span className="skt-node-body">
-                              <span className="skt-name evo">{b.evo.name}</span>
-                              <span className="skt-badge">{BADGE[b.state]}</span>
-                            </span>
-                          </div>
-                          <p className="skt-evo-desc">{b.desc}</p>
-                          <div className={`skt-reqchip${b.reqOwned ? " on" : ""}`}>
-                            <span className="skt-medallion sm"><Sigil name={b.req.icon} /></span>
-                            <span className="skt-reqchip-body">
-                              <span className="skt-reqchip-name">{b.req.name}</span>
-                              <span className="skt-foot">{b.reqOwned ? "所持" : "未所持"}</span>
-                            </span>
-                          </div>
-                        </div>
+                        <EvoCard
+                          icon={b.state === "growing" && !s.baseSlot ? "lock" : b.evo.icon}
+                          name={b.evo.name}
+                          badge={BADGE[b.state]}
+                          req={{ icon: b.req.icon, name: b.req.name, owned: b.reqOwned }}
+                        />
                       </div>
                     ))}
                   </div>
@@ -182,21 +207,25 @@ export default function SkillTree({ weapons, passives, skinId, onClose }: Props)
                 {/* 根から枝へ伸びる金の幹線(上向き) */}
                 {s.branches.length > 0 && <div className="skt-link" aria-hidden />}
 
-                {/* 中段: 段階の効果(最大Lvを上に=上へ伸びる) */}
+                {/* 中段: 節目だけの段階ラダー(最大Lvを上に=上へ伸びる)。高さは全系統で揃える。 */}
                 <ol className="skt-stages">
-                  {[...s.stages].reverse().map((st) => (
+                  {s.ladder.map((st) => (
                     <li
                       key={st.lv}
-                      className={`skt-stage is-${st.status}${st.milestone ? " is-milestone" : ""}${st.last ? " is-last" : ""}`}
+                      className={`skt-stage is-${st.status}${st.last ? " is-last" : ""}`}
                     >
                       <span className="skt-stage-lv">Lv{st.lv}</span>
-                      <span className="skt-stage-text">{st.text}</span>
-                      {st.last && <span className="skt-stage-tag">真化解放</span>}
+                      <span className="skt-stage-badges">
+                        {st.badges.map((bd, i) => (
+                          <span key={i} className="skt-bdg">{bd.k}{bd.v}</span>
+                        ))}
+                        {st.last && <span className="skt-bdg gold">真化</span>}
+                      </span>
                     </li>
                   ))}
                 </ol>
 
-                {/* 根: 基底武器(現在Lv) */}
+                {/* 根: 基底武器(現在Lv ＋ 毎レベルの威力伸び) */}
                 <div className="skt-root">
                   <span className="skt-medallion"><Sigil name={s.base.icon} /></span>
                   <span className="skt-node-body">
@@ -204,9 +233,12 @@ export default function SkillTree({ weapons, passives, skinId, onClose }: Props)
                     {s.baseSlot ? (
                       <Pips level={s.baseSlot.level} max={s.baseSlot.maxLevel} />
                     ) : (
-                      <span className="skt-foot">真化の母体（満了）</span>
+                      <span className="skt-foot">満了</span>
                     )}
                   </span>
+                  {s.dmgPerLv > 0 && (
+                    <span className="skt-grow">力+{s.dmgPerLv}<i>/Lv</i></span>
+                  )}
                 </div>
               </div>
             ))}
@@ -216,26 +248,23 @@ export default function SkillTree({ weapons, passives, skinId, onClose }: Props)
               <div className="skt-system skt-signature" style={{ "--accent": skin?.scarf ?? "#c8a8ff" } as React.CSSProperties}>
                 <div className="skt-branches">
                   <div className={`skt-branch${sigOwned ? " is-done" : " is-growing"}`}>
-                    <div className="skt-evo-card">
-                      <div className="skt-evo-head">
-                        <span className="skt-medallion big"><Sigil name={sigOwned ? sig.icon : "lock"} /></span>
-                        <span className="skt-node-body">
-                          <span className="skt-name evo">{sig.name}</span>
-                          <span className="skt-badge">{sigOwned ? "修得済み" : "秘伝"}</span>
-                        </span>
-                      </div>
-                      <p className="skt-evo-desc">{sig.desc}</p>
-                    </div>
+                    <EvoCard
+                      icon={sigOwned ? sig.icon : "lock"}
+                      name={sig.name}
+                      badge={sigOwned ? "修得済" : "秘伝"}
+                    />
                   </div>
                 </div>
 
                 <div className="skt-link" aria-hidden />
 
+                <ol className="skt-stages" aria-hidden />
+
                 <div className="skt-root">
                   <span className="skt-medallion"><Sigil name="moon" /></span>
                   <span className="skt-node-body">
                     <span className="skt-name">{skin?.name ?? "装い"}</span>
-                    <span className="skt-foot">この装いの秘伝</span>
+                    <span className="skt-foot">秘伝</span>
                   </span>
                 </div>
               </div>
