@@ -38,11 +38,11 @@ import TreasuryScreen from "./ui/TreasuryScreen";
 import { isFullscreen, lockEscape, toggleFullscreen } from "./ui/fullscreen";
 import {
   collectCurio,
+  toggleCurio,
   loadProfile,
   recordRun,
   resetProfile,
   selectSkin,
-  setCurioPosition,
   type Achievement,
   type GearItem,
   type GearSlot,
@@ -294,9 +294,9 @@ export default function App() {
     setProfile((prev) => sellItem(prev, gearId));
   }, []);
 
-  // 飾り棚での遺物の移動(0..1 正規化座標)を保存する
-  const onCurioMove = useCallback((id: string, x: number, y: number) => {
-    setProfile((prev) => setCurioPosition(prev, id, x, y));
+  // 遺物の効果の有効/無効を切り替える(記録の間の遺物タブ)
+  const onToggleCurio = useCallback((id: string) => {
+    setProfile((prev) => toggleCurio(prev, id));
   }, []);
 
 
@@ -324,7 +324,6 @@ export default function App() {
           onAltar={() => setScreen("altar")}
           onTreasury={() => setScreen("treasury")}
           profile={profile}
-          onCurioMove={onCurioMove}
           onHeroSync={onHeroSync}
         />
       )}
@@ -357,6 +356,7 @@ export default function App() {
           profile={profile}
           onBack={() => setScreen("title")}
           onReset={() => setProfile(resetProfile())}
+          onToggleCurio={onToggleCurio}
         />
       )}
 

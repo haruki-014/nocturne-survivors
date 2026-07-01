@@ -164,6 +164,7 @@ export class Engine {
   private signatureWeapon: WeaponId | null = null; // 装いの専用技(あれば修得カードを提示)
   private collectedCurios = new Set<string>(); // 収集済み遺物(未収集のものだけを落とす)
   private nextCurioTime = Infinity; // 次に遺物を落とす時刻(秒)
+  private revivesLeft = 0; // 遺物「枯れぬ薔薇」による残り復活回数(ラン毎に初期化)
   private levelPending = 0;
   private slowmo = 0; // 撃破演出のスローモー残り秒
   private victoryDelay = 0; // ボス撃破後、勝利画面までの余韻秒
@@ -253,9 +254,10 @@ export class Engine {
     this.victoryDelay = 1.4;
     this.hudTimer = 0;
     this.pause = "none";
+    this.revivesLeft = this.metaBonus.reviveCount; // 遺物「枯れぬ薔薇」の復活回数
     this.pushHud();
     this.audio?.setScene("battle"); // 戦闘 BGM を開始(タイトルの menu から切替)
-    this.beginGrace(1.6); // 夜の始まり: 構えの間
+    this.beginGrace(1.6 + this.metaBonus.graceAdd); // 夜の始まり: 構えの間(遺物で延長可)
     if (!this.running) {
       this.running = true;
       this.lastTime = performance.now();
@@ -419,9 +421,20 @@ export class Engine {
 
     // 勝敗判定
     if (w.player.hp <= 0) {
-      this.endRun();
-      this.emit({ type: "gameover", stats: this.stats() });
-      return;
+      // 遺物「枯れぬ薔薇」: 残り復活があれば HP半分で蘇り、構え(無敵)を与えて続行する
+      if (this.revivesLeft > 0) {
+        this.revivesLeft--;
+        w.player.hp = Math.max(1, Math.round(w.derived.maxHp * 0.5));
+        w.player.invuln = Math.max(w.player.invuln, 1.2);
+        w.flash = 1;
+        w.shake = Math.max(w.shake, 12);
+        w.texts.push({ x: w.player.x, y: w.player.y - 40, text: "枯れぬ薔薇 ── 蘇生", life: 2, color: "#c8323e", size: 18 });
+        this.beginGrace(1.4);
+      } else {
+        this.endRun();
+        this.emit({ type: "gameover", stats: this.stats() });
+        return;
+      }
     }
     if (this.mode.victoryTime !== null && w.t >= this.mode.victoryTime) {
       this.endRun();
@@ -516,12 +529,12 @@ export class Engine {
       maxHp: Math.round(100 * (1 + 0.15 * lv("heart")) * mb.maxHpMul),
       might: (1 + 0.08 * lv("might")) * mb.mightMul,
       cooldown: Math.max(0.5, 1 - 0.06 * lv("tome")) * mb.cooldownMul,
-      area: 1 + 0.1 * lv("candle"),
+      area: (1 + 0.1 * lv("candle")) * mb.areaMul,
       magnet: 70 * (1 + 0.3 * lv("magnet")) * mb.magnetMul,
       regen: 0.45 * lv("regen") + mb.regenAdd,
       amountBonus: lv("duplicator"),
-      pierceBonus: 0,
-      lifesteal: 0,
+      pierceBonus: mb.pierceAdd,
+      lifesteal: mb.lifestealAdd,
     };
 
     // ---- 流派(紋章)セットボーナス ----

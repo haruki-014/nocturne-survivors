@@ -18,6 +18,7 @@ import type {
   EnemyKind,
   EnemyVariant,
   GameMode,
+  MetaBonus,
   ModeConfig,
   PassiveDef,
   PassiveId,
@@ -1340,9 +1341,10 @@ export const SKINS_BY_ID: Record<string, SkinDef> = Object.fromEntries(
 export const DEFAULT_SKIN = "wanderer";
 
 // ------------------------------------------------------------
-// 遺物(curio) ── プレイ中に稀にステージへ落ちる収集品。触れて獲得し、
-//   ホーム(タイトル)の「飾り棚」へドラッグで自由配置して飾れる。性能差は無い。
-//   アイコンは既存のシジル(icons.tsx)を流用する(新規SVGは増やさない)。
+// 遺物(curio) ── プレイ中に稀にステージへ落ちる収集品。触れて獲得すると、
+//   以後どのランでも常時発動する恒久ボーナスを与える(記録の間の「遺物」タブで個別に無効化可)。
+//   効果は数値中心＋固有効果(吸血/開幕の構え/復活)の混合。effect が MetaBonus を書き換える
+//   唯一の場所で、effectText はその表示に一致させる。アイコンは既存シジル(icons.tsx)を流用。
 // ------------------------------------------------------------
 export interface CurioDef {
   id: string;
@@ -1350,6 +1352,8 @@ export interface CurioDef {
   desc: string;
   icon: string; // Sigil 名
   color: string;
+  effectText: string; // 効果の一言(遺物タブ表示用)
+  effect: (b: MetaBonus) => void; // 収集かつ有効時に MetaBonus へ適用
 }
 
 export const CURIOS: CurioDef[] = [
@@ -1359,6 +1363,8 @@ export const CURIOS: CurioDef[] = [
     desc: "尽きぬ緋酒を湛えるという銀の杯。",
     icon: "chalice",
     color: "#e0455e",
+    effectText: "与ダメージの一部で回復（吸命）",
+    effect: (b) => { b.lifestealAdd += 0.6; },
   },
   {
     id: "skull",
@@ -1366,6 +1372,8 @@ export const CURIOS: CurioDef[] = [
     desc: "死してなお夜を見通すと噂の頭蓋。",
     icon: "skull",
     color: "#e8dcc3",
+    effectText: "取得経験値 +12%",
+    effect: (b) => { b.xpMul *= 1.12; },
   },
   {
     id: "tome",
@@ -1373,6 +1381,8 @@ export const CURIOS: CurioDef[] = [
     desc: "誰も最後まで読めぬ、囁く一冊。",
     icon: "tome",
     color: "#7be0c4",
+    effectText: "攻撃間隔 -6%",
+    effect: (b) => { b.cooldownMul *= 0.94; },
   },
   {
     id: "candle",
@@ -1380,6 +1390,8 @@ export const CURIOS: CurioDef[] = [
     desc: "風にも消えぬ、青く揺らぐ蝋燭。",
     icon: "candle",
     color: "#ffd66a",
+    effectText: "効果範囲 +12%",
+    effect: (b) => { b.areaMul *= 1.12; },
   },
   {
     id: "hourglass",
@@ -1387,6 +1399,8 @@ export const CURIOS: CurioDef[] = [
     desc: "夜の間だけ砂が逆しまに流れる。",
     icon: "hourglass",
     color: "#cdbcff",
+    effectText: "開幕の構え（無敵）+2秒",
+    effect: (b) => { b.graceAdd += 2; },
   },
   {
     id: "moon",
@@ -1394,6 +1408,8 @@ export const CURIOS: CurioDef[] = [
     desc: "血月から剥がれ落ちたという欠片。",
     icon: "moon",
     color: "#ff6f7e",
+    effectText: "武器の威力 +6%",
+    effect: (b) => { b.mightMul *= 1.06; },
   },
   {
     id: "star",
@@ -1401,6 +1417,8 @@ export const CURIOS: CurioDef[] = [
     desc: "聖域の隅に静かに灯る小さな星。",
     icon: "star4",
     color: "#ffe28a",
+    effectText: "経験石の回収範囲 +20%",
+    effect: (b) => { b.magnetMul *= 1.2; },
   },
   {
     id: "crest",
@@ -1408,6 +1426,8 @@ export const CURIOS: CurioDef[] = [
     desc: "もう誰も覚えていない家の紋。",
     icon: "shield",
     color: "#8fd3ff",
+    effectText: "被ダメージ -6%",
+    effect: (b) => { b.armor = Math.min(0.6, b.armor + 0.06); },
   },
   {
     id: "stake",
@@ -1415,6 +1435,8 @@ export const CURIOS: CurioDef[] = [
     desc: "幾度も伯爵を貫いたという銀杭。",
     icon: "stake",
     color: "#cfd8e6",
+    effectText: "貫通 +1",
+    effect: (b) => { b.pierceAdd += 1; },
   },
   {
     id: "rose",
@@ -1422,6 +1444,8 @@ export const CURIOS: CurioDef[] = [
     desc: "緋を保ったまま朽ちない一輪。",
     icon: "blood",
     color: "#c8323e",
+    effectText: "倒れても1度だけ蘇る（HP半分で復活）",
+    effect: (b) => { b.reviveCount += 1; },
   },
 ];
 

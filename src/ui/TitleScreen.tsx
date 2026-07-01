@@ -6,7 +6,6 @@
 
 import { TOTAL_EVOLUTIONS, ACHIEVEMENTS, type Profile } from "../meta/profile";
 import { Sigil } from "./icons";
-import DioramaShelf from "./DioramaShelf";
 import TaskbarHero from "./TaskbarHero";
 
 interface Props {
@@ -15,7 +14,6 @@ interface Props {
   onAltar: () => void;
   onTreasury: () => void;
   profile: Profile;
-  onCurioMove: (id: string, x: number, y: number) => void;
   onHeroSync: (live: { kills: number; xp: number; depth: number }) => void;
 }
 
@@ -53,7 +51,7 @@ function MoonMark() {
   );
 }
 
-export default function TitleScreen({ onStart, onCodex, onAltar, onTreasury, profile, onCurioMove, onHeroSync }: Props) {
+export default function TitleScreen({ onStart, onCodex, onAltar, onTreasury, profile, onHeroSync }: Props) {
   const played = profile.runs > 0;
   return (
     <div className="overlay dim title-overlay">
@@ -155,10 +153,6 @@ export default function TitleScreen({ onStart, onCodex, onAltar, onTreasury, pro
             </span>
           </div>
         </div>
-
-        {profile.collectedCurios.length > 0 && (
-          <DioramaShelf profile={profile} onCurioMove={onCurioMove} />
-        )}
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { EnemyKind, WeaponId } from "../game/types";
-import { ENEMIES, WEAPONS, PASSIVES, EVOLUTIONS, SCHOOLS, BOSSES } from "../game/data";
+import { ENEMIES, WEAPONS, PASSIVES, EVOLUTIONS, SCHOOLS, BOSSES, CURIOS, TOTAL_CURIOS } from "../game/data";
 import { enemyPortrait } from "../game/render";
 import { Sigil } from "./icons";
 import {
@@ -16,12 +16,13 @@ import {
 //     discovered* 集合に含まれるものだけ正体を出し、未発見は「？？？」で伏せる。
 //     敵の絵は enemyPortrait() で実スプライトを使うため図鑑とゲームの姿が一致する。
 
-type Tab = "records" | "bestiary" | "armory" | "honors";
+type Tab = "records" | "bestiary" | "armory" | "relics" | "honors";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "records", label: "記録" },
   { id: "bestiary", label: "図鑑" },
   { id: "armory", label: "武具" },
+  { id: "relics", label: "遺物" },
   { id: "honors", label: "称号" },
 ];
 
@@ -263,13 +264,56 @@ function Honors({ p }: { p: Profile }) {
   );
 }
 
+// 遺物: 全件をグリッドで並べ、収集済みは効果文＋有効/無効トグル、未収集はシルエット。
+function Relics({ p, onToggle }: { p: Profile; onToggle: (id: string) => void }) {
+  const collected = new Set(p.collectedCurios);
+  const disabled = new Set(p.disabledCurios);
+  return (
+    <>
+      <div className="codex-section-title">
+        遺 物 <span className="codex-count">{collected.size}/{TOTAL_CURIOS}</span>
+      </div>
+      <p className="relic-lead">夜に稀に落ちる遺物。集めると常時発動する恩恵となる。要らぬ効果は個別に切れる。</p>
+      <div className="codex-grid">
+        {CURIOS.map((c) => {
+          const known = collected.has(c.id);
+          const off = disabled.has(c.id);
+          return (
+            <div
+              key={c.id}
+              className={`codex-cell relic-cell${known ? "" : " locked"}${known && off ? " off" : ""}`}
+              style={{ "--accent": c.color } as React.CSSProperties}
+            >
+              <span className={`relic-glyph${known ? "" : " silhouette"}`}>
+                <Sigil name={known ? c.icon : "lock"} />
+              </span>
+              <span className="codex-cell-name">{known ? c.name : "？ ？ ？"}</span>
+              <span className="relic-effect">{known ? c.effectText : "夜に落ちる遺物"}</span>
+              {known && (
+                <button
+                  className={`relic-toggle${off ? "" : " on"}`}
+                  onClick={() => onToggle(c.id)}
+                  aria-pressed={!off}
+                >
+                  {off ? "無効" : "有効"}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
 interface Props {
   profile: Profile;
   onBack: () => void;
   onReset: () => void;
+  onToggleCurio: (id: string) => void;
 }
 
-export default function CodexScreen({ profile, onBack, onReset }: Props) {
+export default function CodexScreen({ profile, onBack, onReset, onToggleCurio }: Props) {
   const [tab, setTab] = useState<Tab>("records");
   return (
     <div className="overlay dim">
@@ -290,6 +334,7 @@ export default function CodexScreen({ profile, onBack, onReset }: Props) {
           {tab === "records" && <Records p={profile} onReset={onReset} />}
           {tab === "bestiary" && <Bestiary p={profile} />}
           {tab === "armory" && <Armory p={profile} />}
+          {tab === "relics" && <Relics p={profile} onToggle={onToggleCurio} />}
           {tab === "honors" && <Honors p={profile} />}
         </div>
         <div className="btn-col">

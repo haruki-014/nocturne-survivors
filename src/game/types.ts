@@ -515,9 +515,16 @@ export interface MetaBonus {
   xpMul: number; // 取得経験値倍率
   regenAdd: number; // 追加HP再生(毎秒)
   armor: number; // 被ダメージ軽減割合(0〜0.6)
+  // ── 遺物(収集で常時発動する恒久ボーナス)で使う枠 ──
+  areaMul: number; // 効果範囲倍率
+  pierceAdd: number; // 貫通加算
+  lifestealAdd: number; // 与ダメ由来の追加吸命(derived.lifesteal へ加算)
+  graceAdd: number; // 開幕の構え(無敵)延長(秒)
+  reviveCount: number; // ラン中の復活回数
 }
 
 export const NO_META_BONUS: MetaBonus = {
   maxHpMul: 1, mightMul: 1, speedMul: 1, cooldownMul: 1,
   magnetMul: 1, xpMul: 1, regenAdd: 0, armor: 0,
+  areaMul: 1, pierceAdd: 0, lifestealAdd: 0, graceAdd: 0, reviveCount: 0,
 };

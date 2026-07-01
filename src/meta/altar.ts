@@ -14,6 +14,7 @@
 
 import type { MetaBonus } from "../game/types";
 import { NO_META_BONUS } from "../game/types";
+import { CURIOS_BY_ID } from "../game/data";
 import { saveProfile, type Profile } from "./profile";
 
 export interface MetaUpgradeDef {
@@ -90,6 +91,11 @@ export function computeMetaBonus(profile: Profile): MetaBonus {
   for (const def of META_UPGRADES) {
     const lv = profile.upgrades[def.id] ?? 0;
     if (lv > 0) def.apply(b, lv);
+  }
+  // 遺物: 収集済み かつ 無効化されていないものを常時発動として畳み込む
+  for (const id of profile.collectedCurios) {
+    if (profile.disabledCurios.includes(id)) continue;
+    CURIOS_BY_ID[id]?.effect(b);
   }
   return b;
 }

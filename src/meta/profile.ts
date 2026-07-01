@@ -82,9 +82,9 @@ export interface Profile {
   // ---- 装い(スキン) ----
   selectedSkin: string;
   unlockedSkins: string[];
-  // ---- 遺物(ホーム飾り棚の収集品) ----
+  // ---- 遺物(収集で常時発動する恒久ボーナス) ----
   collectedCurios: string[]; // 収集済みの遺物 id
-  curioLayout: Record<string, { x: number; y: number }>; // 飾り棚内の配置(0..1 正規化座標)
+  disabledCurios: string[]; // 収集済みだが効果を無効化した遺物 id(記録の間で個別に切替)
   // ---- タスクバーヒーロー(ホームの自動戦闘) ----
   hero: HeroState;
 }
@@ -156,7 +156,7 @@ export function emptyProfile(): Profile {
     litSchoolsMax: { steel: 0, spirit: 0, moon: 0, blood: 0 },
     achievements: [], modeBest: {}, lastRun: null,
     souls: 0, totalSouls: 0, upgrades: {}, selectedSkin: DEFAULT_SKIN, unlockedSkins: [DEFAULT_SKIN],
-    collectedCurios: [], curioLayout: {},
+    collectedCurios: [], disabledCurios: [],
     hero: { xp: 0, kills: 0, depth: 1, found: 0, lastTick: Date.now(), equipped: {}, inventory: [] },
   };
 }
@@ -185,7 +185,7 @@ export function loadProfile(): Profile {
       unlockedSkins: Array.from(new Set([DEFAULT_SKIN, ...(p.unlockedSkins ?? [])])),
       selectedSkin: p.selectedSkin ?? DEFAULT_SKIN,
       collectedCurios: [...(p.collectedCurios ?? [])],
-      curioLayout: { ...(p.curioLayout ?? {}) },
+      disabledCurios: [...(p.disabledCurios ?? [])],
       hero: {
         xp: p.hero?.xp ?? 0,
         kills: p.hero?.kills ?? 0,
@@ -308,25 +308,21 @@ export function selectSkin(prev: Profile, id: string): Profile {
   return p;
 }
 
-/** 遺物を収集に加える。新規なら飾り棚の初期位置も決めて保存する。 */
+/** 遺物を収集に加える(新規のみ)。効果は収集した時点で常時発動する。 */
 export function collectCurio(prev: Profile, id: string): Profile {
   if (prev.collectedCurios.includes(id)) return prev;
-  const collectedCurios = [...prev.collectedCurios, id];
-  // 初期配置: まだ位置が無ければ棚の上段に左から順へ並べる(後でドラッグ移動可)
-  const n = collectedCurios.length - 1;
-  const curioLayout = { ...prev.curioLayout };
-  if (!curioLayout[id]) {
-    curioLayout[id] = { x: 0.1 + (n % 5) * 0.2, y: n < 5 ? 0.32 : 0.7 };
-  }
-  const p = { ...prev, collectedCurios, curioLayout };
+  const p = { ...prev, collectedCurios: [...prev.collectedCurios, id] };
   saveProfile(p);
   return p;
 }
 
-/** 飾り棚での遺物の位置(0..1 正規化)を保存する。 */
-export function setCurioPosition(prev: Profile, id: string, x: number, y: number): Profile {
-  const clamp = (v: number) => Math.max(0, Math.min(1, v));
-  const p = { ...prev, curioLayout: { ...prev.curioLayout, [id]: { x: clamp(x), y: clamp(y) } } };
+/** 収集済み遺物の効果の有効/無効を切り替える(無効化は disabledCurios に載せる)。 */
+export function toggleCurio(prev: Profile, id: string): Profile {
+  if (!prev.collectedCurios.includes(id)) return prev;
+  const disabledCurios = prev.disabledCurios.includes(id)
+    ? prev.disabledCurios.filter((x) => x !== id)
+    : [...prev.disabledCurios, id];
+  const p = { ...prev, disabledCurios };
   saveProfile(p);
   return p;
 }
