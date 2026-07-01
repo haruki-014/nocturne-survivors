@@ -1371,7 +1371,8 @@ export class Engine {
       w.pickups.push({ kind: "potion", x: e.x, y: e.y });
     }
     // 戦利品(装備): 蝙蝠以外から低確率で(特異種は出やすい)。ホームのオートバトラーで装備する。
-    if (e.kind !== "bat" && Math.random() < (e.variant !== "normal" ? 0.08 : 0.012)) {
+    // ドロップ率は控えめに(通常0.4% / 特異種3%)。エリート・ボスの確定ドロップが主な入手源。
+    if (e.kind !== "bat" && Math.random() < (e.variant !== "normal" ? 0.03 : 0.004)) {
       w.pickups.push({ kind: "loot", x: e.x, y: e.y - 6, lootTier: e.variant !== "normal" ? 1 : 0 });
     }
     // 経験石が増えすぎたら古いものを統合

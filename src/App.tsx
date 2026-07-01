@@ -44,11 +44,12 @@ import {
   selectSkin,
   setCurioPosition,
   type Achievement,
+  type GearItem,
   type GearSlot,
   type Profile,
 } from "./meta/profile";
 import { buyUpgrade, computeMetaBonus } from "./meta/altar";
-import { addLoot, equipItem, sellItem, syncHero, unequipItem } from "./meta/hero";
+import { applyLoot, equipItem, rollLoot, sellItem, syncHero, unequipItem } from "./meta/hero";
 
 type Screen = "title" | "modeselect" | "codex" | "altar" | "treasury" | "playing" | "levelup" | "paused" | "gameover" | "victory";
 
@@ -90,10 +91,17 @@ export default function App() {
   const [soulsEarned, setSoulsEarned] = useState(0);
   const [currentMode, setCurrentMode] = useState<GameMode>(DEFAULT_MODE);
   const [fullscreen, setFullscreen] = useState(false);
+  // このランで拾った戦利品/遺物(リザルトで一覧する)。ラン中は ref に貯め、終了時に state へ確定。
+  const [runLoot, setRunLoot] = useState<GearItem[]>([]);
+  const [runCurios, setRunCurios] = useState<string[]>([]);
+  const runLootRef = useRef<GearItem[]>([]);
+  const runCurioRef = useRef<string[]>([]);
 
-  // screen の最新値をイベントハンドラから参照するための ref
+  // screen / profile の最新値をイベントハンドラから参照するための ref
   const screenRef = useRef(screen);
   screenRef.current = screen;
+  const profileRef = useRef(profile);
+  profileRef.current = profile;
 
   // ---- エンジン生成(canvas 常設マウント、生成は一度きり) ----
   useEffect(() => {
@@ -111,16 +119,23 @@ export default function App() {
             audioRef.current?.cue("levelup");
             break;
           case "curio":
-            // ステージで拾った遺物を収集に加えて保存(ホーム飾り棚に並ぶ)
+            // ステージで拾った遺物を収集に加えて保存(ホーム飾り棚に並ぶ)＋このランの記録に追加
+            runCurioRef.current.push(e.id);
             setProfile((prev) => collectCurio(prev, e.id));
             break;
-          case "loot":
+          case "loot": {
             // 拾った戦利品(装備)をホームのヒーローへ。ベストなら自動装着・劣れば売却。
-            setProfile((prev) => addLoot(prev, e.tier));
+            // roll は一度だけ行い、その現物をこのランの記録にも積む(二重ロール/二重計上を防ぐ)。
+            const item = rollLoot(e.tier, profileRef.current.selectedSkin);
+            runLootRef.current.push(item);
+            setProfile((prev) => applyLoot(prev, item));
             break;
+          }
           case "gameover":
           case "victory":
             setStats(e.stats);
+            setRunLoot([...runLootRef.current]); // このランの戦利品/遺物をリザルト表示用に確定
+            setRunCurios([...runCurioRef.current]);
             setScreen(e.type === "victory" ? "victory" : "gameover");
             audioRef.current?.cue(e.type); // 敗北/勝利のスティンガー
             audioRef.current?.setScene("menu"); // BGM を題の夜想へ戻す
@@ -226,18 +241,28 @@ export default function App() {
   }, []);
 
   // ---- 操作ハンドラ ----
+  // ラン開始時に、このランの戦利品/遺物の記録を空へ戻す。
+  const resetRunLog = useCallback(() => {
+    runLootRef.current = [];
+    runCurioRef.current = [];
+    setRunLoot([]);
+    setRunCurios([]);
+  }, []);
+
   const startRun = useCallback(() => {
     engineRef.current?.start(currentMode);
     setStats(null);
+    resetRunLog();
     setScreen("playing");
-  }, [currentMode]);
+  }, [currentMode, resetRunLog]);
 
   const startMode = useCallback((mode: GameMode) => {
     setCurrentMode(mode);
     engineRef.current?.start(mode);
     setStats(null);
+    resetRunLog();
     setScreen("playing");
-  }, []);
+  }, [resetRunLog]);
 
   const pickChoice = useCallback((c: UpgradeChoice) => {
     const engine = engineRef.current;
@@ -358,6 +383,8 @@ export default function App() {
           unlocked={unlocked}
           unlockedSkins={unlockedSkins}
           soulsEarned={soulsEarned}
+          runLoot={runLoot}
+          runCurios={runCurios}
           onRetry={startRun}
           onTitle={() => setScreen("title")}
           onCodex={() => setScreen("codex")}

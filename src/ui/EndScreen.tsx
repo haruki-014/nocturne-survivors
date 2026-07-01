@@ -7,9 +7,12 @@
 //     専用の背景(勝利=夜明け / 敗北=緋の沈降)で全面を覆う。
 
 import type { RunStats } from "../game/types";
-import { MODES, SKINS_BY_ID } from "../game/data";
+import { MODES, SKINS_BY_ID, CURIOS_BY_ID } from "../game/data";
 import { Sigil } from "./icons";
-import type { Achievement } from "../meta/profile";
+import type { Achievement, GearItem } from "../meta/profile";
+import { RARITY_COLORS, RARITY_NAMES, slotLabel } from "../meta/hero";
+
+const LOOT_CHIP_CAP = 10; // 戦利品チップの表示上限(超過は「他 N 点」)
 
 function fmtTime(t: number): string {
   const m = Math.floor(t / 60);
@@ -23,13 +26,15 @@ interface Props {
   unlocked: Achievement[];
   unlockedSkins: string[];
   soulsEarned: number;
+  runLoot: GearItem[]; // この夜に拾った戦利品(装備)
+  runCurios: string[]; // この夜に拾った遺物のid
   onRetry: () => void;
   onTitle: () => void;
   onCodex: () => void;
   onAltar: () => void;
 }
 
-export default function EndScreen({ victory, stats, unlocked, unlockedSkins, soulsEarned, onRetry, onTitle, onCodex, onAltar }: Props) {
+export default function EndScreen({ victory, stats, unlocked, unlockedSkins, soulsEarned, runLoot, runCurios, onRetry, onTitle, onCodex, onAltar }: Props) {
   const endless = stats.mode === "endless";
   const modeName = MODES[stats.mode].name;
   const title = victory ? "夜 明 け" : endless ? "夜 は 明 け ぬ" : "緋 に 沈 む";
@@ -40,6 +45,14 @@ export default function EndScreen({ victory, stats, unlocked, unlockedSkins, sou
     : endless
       ? "果てなき夜に呑まれた。だが、ここまで来た。"
       : "灯は消え、骸の群れが静かに閉じてゆく。";
+
+  // この夜の戦利品: レアリティ別の点数と、希少度→価値で並べた表示チップ(上限あり)。
+  const rarityCounts = [0, 0, 0, 0, 0];
+  for (const g of runLoot) rarityCounts[g.rarity]++;
+  const chips = [...runLoot].sort((a, b) => b.rarity - a.rarity || b.power - a.power);
+  const shownChips = chips.slice(0, LOOT_CHIP_CAP);
+  const extraChips = chips.length - shownChips.length;
+  const hasLoot = runLoot.length > 0 || runCurios.length > 0;
 
   return (
     <div className={`overlay end-screen ${victory ? "victory" : "defeat"}`}>
@@ -73,6 +86,62 @@ export default function EndScreen({ victory, stats, unlocked, unlockedSkins, sou
         <div className="souls-earned" aria-label="獲得した魂">
           <Sigil name="skull" className="souls-ico" />
           <span>魂を <b>{soulsEarned.toLocaleString()}</b> 集めた</span>
+        </div>
+
+        {/* ── この夜の戦利品(装備・遺物) ── */}
+        <div className="end-loot" aria-label="この夜の戦利品">
+          <div className="end-loot-head">
+            <span className="end-loot-title">この夜の戦利品</span>
+            {hasLoot && (
+              <span className="end-loot-count">
+                装備 {runLoot.length}
+                {runCurios.length > 0 && ` ・ 遺物 ${runCurios.length}`}
+              </span>
+            )}
+          </div>
+          {!hasLoot ? (
+            <p className="end-loot-empty">骸は何も遺さなかった。</p>
+          ) : (
+            <>
+              {runLoot.length > 0 && (
+                <div className="end-loot-rarities">
+                  {rarityCounts.map((n, r) =>
+                    n > 0 ? (
+                      <span key={r} className="end-rar-badge" style={{ "--rc": RARITY_COLORS[r] } as React.CSSProperties}>
+                        <i />
+                        {RARITY_NAMES[r]} <b>{n}</b>
+                      </span>
+                    ) : null,
+                  )}
+                </div>
+              )}
+              {runLoot.length > 0 && (
+                <div className="end-loot-chips">
+                  {shownChips.map((g) => (
+                    <span key={g.id} className="end-loot-chip" style={{ "--rc": RARITY_COLORS[g.rarity] } as React.CSSProperties}>
+                      <span className="chip-slot">{slotLabel(g.slot)}</span>
+                      <span className="chip-name">{g.name}</span>
+                      {g.trait && <span className="chip-trait" title="特性あり">◆</span>}
+                    </span>
+                  ))}
+                  {extraChips > 0 && <span className="end-loot-chip more">他 {extraChips} 点</span>}
+                </div>
+              )}
+              {runCurios.length > 0 && (
+                <div className="end-loot-curios">
+                  {runCurios.map((id, i) => {
+                    const c = CURIOS_BY_ID[id];
+                    return (
+                      <span key={id + i} className="end-curio" style={{ "--rc": c?.color ?? "#ffe28a" } as React.CSSProperties}>
+                        <Sigil name={c?.icon ?? "skull"} className="end-curio-ico" />
+                        {c?.name ?? "遺物"}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         {unlocked.length > 0 && (

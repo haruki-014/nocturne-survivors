@@ -135,9 +135,9 @@ export function rollLoot(tier: number, currentSkin: string): GearItem {
   return { id: gearId(), slot, name, rarity, atk: s.atk, hp: s.hp, haste: s.haste, power, affinity: rollAffinity(currentSkin), trait };
 }
 
-/** 戦利品を獲得: 空きスロットは自動装着、それ以外は宝物庫へ(上限超過は最弱を売却=XP)。 */
-export function addLoot(prev: Profile, tier: number): Profile {
-  const item = rollLoot(tier, prev.selectedSkin);
+/** 既に生成済みの戦利品を獲得: 空きスロットは自動装着、それ以外は宝物庫へ(上限超過は最弱を売却=XP)。
+ *  ロール(rollLoot)と分離しているのは、拾得側が「何を拾ったか」を掴んでリザルトへ集計できるようにするため。 */
+export function applyLoot(prev: Profile, item: GearItem): Profile {
   const h = prev.hero;
   let equipped = h.equipped;
   const inventory = [...h.inventory];
@@ -153,6 +153,11 @@ export function addLoot(prev: Profile, tier: number): Profile {
     }
   }
   return commitHero(prev, { ...h, equipped, inventory, found: h.found + 1, xp: h.xp + xpGain });
+}
+
+/** 戦利品を1つ生成して獲得する(rollLoot ＋ applyLoot の薄いラッパ)。 */
+export function addLoot(prev: Profile, tier: number): Profile {
+  return applyLoot(prev, rollLoot(tier, prev.selectedSkin));
 }
 
 /** 宝物庫の装備をスロットへ装着する。元の装備があれば宝物庫へ戻す。 */
