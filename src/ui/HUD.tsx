@@ -39,6 +39,36 @@ function Slots({ items, label }: { items: HudSlot[]; label: string }) {
   );
 }
 
+/** 奥義ゲージ: 討伐で満ちる血月。新月→満月を影の円のスライドで描く。 */
+function UltMoon({ ult }: { ult: HudState["ult"] }) {
+  // 影の円: charge 0 で月を完全に覆い、1 で完全に外れる(右から満ちる)
+  const shadowX = 20 - ult.charge * 32;
+  return (
+    <div
+      className={`ult-moon${ult.ready ? " ready" : ""}${ult.active ? " active" : ""}`}
+      title={`奥義「${ult.name}」── 討伐で血月が満ち、E で解放`}
+      style={{ "--uc": ult.color } as React.CSSProperties}
+    >
+      <svg viewBox="0 0 40 40" className="ult-moon-svg" aria-hidden="true">
+        <defs>
+          <mask id="ult-moon-mask">
+            <circle cx="20" cy="20" r="13" fill="#fff" />
+            <circle cx={shadowX} cy="20" r="13.6" fill="#000" />
+          </mask>
+        </defs>
+        <circle cx="20" cy="20" r="13" className="moon-back" />
+        <circle cx="20" cy="20" r="13" className="moon-lit" mask="url(#ult-moon-mask)" />
+        <circle cx="20" cy="20" r="13" className="moon-rim" />
+      </svg>
+      {ult.ready && (
+        <span className="ult-key">
+          <kbd>E</kbd>
+        </span>
+      )}
+    </div>
+  );
+}
+
 interface Props {
   hud: HudState;
 }
@@ -87,6 +117,7 @@ export default function HUD({ hud }: Props) {
           </div>
 
           <div className="hud-right">
+            <UltMoon ult={hud.ult} />
             <span className="chip kills-chip">
               <span className="label">討伐</span>
               {hud.kills}

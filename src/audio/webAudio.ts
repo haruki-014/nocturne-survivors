@@ -39,7 +39,7 @@ const SFX_MIN_GAP: Record<SfxCue, number> = {
   atkBolt: 0.05, atkKnife: 0.04, atkBoomerang: 0.09, atkLightning: 0.1,
   atkFrost: 0.08, atkRoyal: 0.12, atkGold: 0.06, atkVoid: 0.06, atkPlague: 0.06, atkCrimson: 0.09,
   hit: 0.08, kill: 0.05, pickup: 0.05, dodge: 0.18,
-  boss: 0.5, levelup: 0.2, gameover: 0.5, victory: 0.5, select: 0.05,
+  boss: 0.5, ult: 0.8, levelup: 0.2, gameover: 0.5, victory: 0.5, select: 0.05,
 };
 
 export class WebAudioPlayer implements AudioSink {
@@ -161,6 +161,7 @@ export class WebAudioPlayer implements AudioSink {
       case "pickup": this.sfxPickup(t); break;
       case "dodge": this.sfxDodge(t); break;
       case "boss": this.sfxBoss(t); break;
+      case "ult": this.arp(t, [45, 52, 57, 64, 69], 0.11, "sawtooth", 0.12); break; // 低から昇る解放の号砲
       case "levelup": this.arp(t, [57, 60, 64, 69], 0.09, "triangle", 0.10); break; // 上行 Am
       case "gameover": this.arp(t, [64, 60, 57, 52], 0.22, "sine", 0.12); break; // 下行で沈む
       case "victory": this.arp(t, [57, 64, 69, 72], 0.14, "triangle", 0.12); break; // 上行で晴れる

@@ -20,7 +20,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import type { Renderer, Settings, World } from "./types";
-import { ARENA_RADIUS, BOSSES_BY_ID, BOSS_WINDUP, CURIOS_BY_ID, DEFAULT_SKIN, ENEMIES, SKINS_BY_ID } from "./data";
+import { ARENA_RADIUS, BOSSES_BY_ID, BOSS_WINDUP, CURIOS_BY_ID, DEFAULT_SKIN, ENEMIES, SKINS_BY_ID, ULTIMATES } from "./data";
 import {
   TAU, shade, withAlpha, hash2, makeSprite,
   enemySprite, playerSprite, gemSprite, pickupSprite, decoSprite, landmarkSprite,
@@ -358,6 +358,112 @@ function drawAtmosphere(v: View): void {
     ctx.fillStyle = f;
     ctx.fillRect(0, 0, vw, vh);
     ctx.globalCompositeOperation = "source-over";
+  }
+}
+
+/**
+ * 奥義の演出。発動中の流派に応じて世界と画面を彩る:
+ *   共通=解放の拡がるリング / 鋼=刃輪(投射物として描画済み) /
+ *   霊=刻停の藍の静寂＋刻印環 / 月=白夜の月光域 / 血=夜宴の緋域と縁のにじみ。
+ */
+function drawUltimate(v: View): void {
+  const { ctx, vw, vh, world, wx, wy } = v;
+  const ua = world.ultActive;
+  // 刻停は ultActive が終わっても timeStop が残ることは無い(dur 同値)が、独立に読む
+  const frozen = world.timeStop > 0;
+  if (!ua && !frozen) return;
+  const p = world.player;
+  const px = wx(p.x);
+  const py = wy(p.y);
+
+  if (ua) {
+    const def = ULTIMATES[ua.school];
+    const pr = Math.min(1, ua.t / ua.dur); // 0→1
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+
+    // 共通: 解放の瞬間に走る大リング(最初の0.6秒)
+    if (ua.t < 0.6) {
+      const rp = ua.t / 0.6;
+      ctx.strokeStyle = withAlpha(def.color, 0.6 * (1 - rp));
+      ctx.lineWidth = 3 + 6 * (1 - rp);
+      ctx.beginPath();
+      ctx.arc(px, py, 40 + rp * 620, 0, TAU);
+      ctx.stroke();
+    }
+
+    if (ua.school === "moon") {
+      // 月蝕・白夜: 広大な月光の領域と、周期ごとに拡がる淡環
+      const R = def.radius;
+      const g = ctx.createRadialGradient(px, py, 20, px, py, R);
+      g.addColorStop(0, withAlpha(def.color, 0.16));
+      g.addColorStop(0.75, withAlpha(def.color, 0.07));
+      g.addColorStop(1, withAlpha(def.color, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(px, py, R, 0, TAU);
+      ctx.fill();
+      const tp = (ua.t % def.tick) / def.tick;
+      ctx.strokeStyle = withAlpha("#fff6dd", 0.35 * (1 - tp));
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(px, py, 30 + tp * (R - 30), 0, TAU);
+      ctx.stroke();
+    } else if (ua.school === "blood") {
+      // 血の夜宴: 緋の領域(脈動)と、縁へ滲む深紅
+      const R = def.radius;
+      const pulse = 0.85 + 0.15 * Math.sin(world.t * 9);
+      const g = ctx.createRadialGradient(px, py, 10, px, py, R * pulse);
+      g.addColorStop(0, withAlpha(def.color, 0.13));
+      g.addColorStop(1, withAlpha(def.color, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(px, py, R * pulse, 0, TAU);
+      ctx.fill();
+      ctx.globalCompositeOperation = "source-over";
+      const vg = ctx.createRadialGradient(vw / 2, vh / 2, Math.min(vw, vh) * 0.36, vw / 2, vh / 2, Math.max(vw, vh) * 0.72);
+      vg.addColorStop(0, "rgba(200,50,62,0)");
+      vg.addColorStop(1, `rgba(140,20,34,${0.28 * (1 - pr * 0.4)})`);
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, 0, vw, vh);
+    } else if (ua.school === "steel") {
+      // 千刃・満月輪: 刃輪そのものは投射物。ここでは薄鋼の円環だけ添える
+      ctx.strokeStyle = withAlpha(def.color, 0.22);
+      ctx.lineWidth = 1.6;
+      ctx.setLineDash([10, 14]);
+      ctx.lineDashOffset = -world.t * 60;
+      ctx.beginPath();
+      ctx.arc(px, py, 54, 0, TAU);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
+  }
+
+  // 霊・刻停: 藍の静寂(世界が冷え、自機の周りに刻印環が回る)
+  if (frozen) {
+    ctx.save();
+    ctx.fillStyle = "rgba(70,58,140,0.12)";
+    ctx.fillRect(0, 0, vw, vh);
+    ctx.globalCompositeOperation = "lighter";
+    ctx.strokeStyle = withAlpha("#9d7bff", 0.5);
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([6, 9]);
+    ctx.lineDashOffset = -world.t * 40;
+    ctx.beginPath();
+    ctx.arc(px, py, 44, 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // 止まった時の粒子: 空中に静止する霊光
+    for (let i = 0; i < 14; i++) {
+      const sx = (hash2(i, 7) - 0.5) * vw + vw / 2;
+      const sy = (hash2(i, 13) - 0.5) * vh + vh / 2;
+      ctx.fillStyle = withAlpha("#cdbcff", 0.25 + 0.2 * Math.sin(world.t * 2 + i));
+      ctx.beginPath();
+      ctx.arc(sx, sy, 1.6, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
   }
 }
 
@@ -728,17 +834,77 @@ function drawPlayer(v: View): void {
     ctx.setLineDash([]);
     ctx.restore();
   }
+  // 攻撃モーション: 発射の瞬間、castT が張られる(進行 1→0)。
+  //   踏み込み(lunge)＋僅かな伸縮で「身振り」を、種別ごとの閃きで「技の型」を見せる。
+  const castP = p.castT > 0 ? p.castT / p.castMax : 0; // 1=振り始め → 0=終わり
+  const lunge = castP > 0 && p.castKind !== "rune" ? Math.sin(castP * Math.PI) * 3.2 : 0;
+  const lx = Math.cos(p.castAng) * lunge;
+  const ly = Math.sin(p.castAng) * lunge;
+
   // 影
   ctx.fillStyle = "rgba(0,0,0,0.45)";
   ctx.beginPath();
   ctx.ellipse(wx(p.x), wy(p.y) + 18, 13, 5, 0, 0, TAU);
   ctx.fill();
+
+  // 刻印(rune): 落雷の詠唱。足元に金の魔法陣が閃く
+  if (castP > 0 && p.castKind === "rune") {
+    const a = castP;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.strokeStyle = withAlpha("#ffd95e", 0.55 * a);
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([4, 6]);
+    ctx.lineDashOffset = world.t * 30;
+    ctx.beginPath();
+    ctx.ellipse(wx(p.x), wy(p.y) + 8, 20 + (1 - a) * 8, (20 + (1 - a) * 8) * 0.45, 0, 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
   ctx.save();
-  ctx.translate(wx(p.x), wy(p.y) - bob);
-  ctx.scale(flip, 1);
+  ctx.translate(wx(p.x) + lx, wy(p.y) - bob + ly * 0.5);
+  // 踏み込みの伸縮(進行方向へ僅かに伸びる)
+  const stretch = 1 + Math.sin(castP * Math.PI) * 0.06;
+  ctx.scale(flip * stretch, 2 - stretch);
   if (p.invuln > 0 && Math.floor(world.t * 18) % 2 === 0) ctx.globalAlpha = 0.4;
   ctx.drawImage(spr, -spr.width / 2, -spr.height / 2);
   ctx.restore();
+
+  // 振り(slash): 刃の弧光。詠唱(cast): 掌の魔力の煌めき。
+  if (castP > 0 && p.castKind !== "rune") {
+    const a = castP;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    if (p.castKind === "slash") {
+      // 発射方向へ薙ぐ弧(進行で角度が流れる)
+      const sweep = (1 - a) * 1.5 - 0.75; // -0.75 → +0.75 rad
+      ctx.strokeStyle = withAlpha("#e8f0ff", 0.7 * a);
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.arc(wx(p.x), wy(p.y) - 2, 22, p.castAng + sweep - 0.55, p.castAng + sweep + 0.55);
+      ctx.stroke();
+      ctx.strokeStyle = withAlpha("#9fb3d6", 0.35 * a);
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(wx(p.x), wy(p.y) - 2, 22, p.castAng + sweep - 0.4, p.castAng + sweep + 0.4);
+      ctx.stroke();
+    } else {
+      // 詠唱の火花: 掌先に主色の光点が弾ける
+      const hx = wx(p.x) + Math.cos(p.castAng) * 15;
+      const hy = wy(p.y) - 4 + Math.sin(p.castAng) * 15;
+      const g = ctx.createRadialGradient(hx, hy, 1, hx, hy, 10 + (1 - a) * 6);
+      g.addColorStop(0, withAlpha("#efe7ff", 0.8 * a));
+      g.addColorStop(0.5, withAlpha("#9d7bff", 0.5 * a));
+      g.addColorStop(1, withAlpha("#9d7bff", 0));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(hx, hy, 10 + (1 - a) * 6, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
   // 足元のHPバー
   const bw = 34;
   const ratio = Math.max(0, p.hp / p.maxHp);
@@ -1086,6 +1252,9 @@ export function renderWorld(
 
   // --- 雰囲気(光と闇): ランタン光・血月・微塵・縁・瘴気・被弾フラッシュ ---
   drawAtmosphere(v);
+
+  // --- 奥義の演出(解放リング・刻停の静寂・月蝕の白光・夜宴の緋) ---
+  drawUltimate(v);
 
   // --- 特異種の画面外マーカー(視界外にいる間も存在を知らせる) ---
   drawVariantMarkers(v);

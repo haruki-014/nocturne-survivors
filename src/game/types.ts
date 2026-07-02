@@ -269,6 +269,11 @@ export interface Player {
   roll: number; // 残りローリング時間(>0 の間は回避中・無敵)
   rollDirX: number; // ローリングの進行方向
   rollDirY: number;
+  // ── 攻撃モーション(発射の身振り)。エンジンが発射時に張り、描画が減衰を読む ──
+  castT: number; // 残りモーション秒(>0 の間、身構え・振り・閃きを描く)
+  castMax: number; // モーション総秒(進行率の分母)
+  castAng: number; // 発射方向(ラジアン)。rune では未使用
+  castKind: "slash" | "cast" | "rune"; // 振り(刃/帰刃) / 詠唱(魔弾) / 刻印(雷)
 }
 
 export interface OwnedWeapon {
@@ -332,6 +337,10 @@ export interface World {
   skinId: string; // 選択中のプレイヤースキン(描画用)
   sigWield: boolean; // 装いの専用技(秘伝)を所持中か。装備者の特別演出に使う
   sigColor: string; // 専用技の主色(装備者グロー・統一演出の色)
+  // ── 奥義(Ultimate)。討伐で血月が満ち、E で解放。中身は最多流派で決まる ──
+  ultCharge: number; // 0..1。満ちると解放可能
+  ultActive: { school: SchoolId; t: number; dur: number } | null; // 発動中の奥義(経過秒/総秒)
+  timeStop: number; // 霊奥義「刻停」の残り秒。>0 の間、敵と敵弾が凍る
 }
 
 // ---------- UI との橋渡し ----------
@@ -392,6 +401,15 @@ export interface HudState {
   passives: HudSlot[];
   schools: HudSchool[];
   bossHp: { hp: number; max: number; name: string } | null;
+  /** 奥義: 血月ゲージと、いま満ちれば放たれる奥義(最多流派で決まる) */
+  ult: {
+    charge: number; // 0..1
+    ready: boolean;
+    active: boolean;
+    name: string;
+    color: string;
+    school: SchoolId;
+  };
 }
 
 export interface RunStats {
@@ -481,6 +499,7 @@ export type SfxCue =
   | "pickup" // 道具(回復/磁石/遺物/戦利品)の取得
   | "dodge" // ローリング回避
   | "boss" // ボス到来
+  | "ult" // 奥義の解放(血月満ちる)
   | "levelup" // レベルアップ(アルカナ提示)
   | "gameover" // 敗北
   | "victory" // 夜明け(勝利)
@@ -506,6 +525,18 @@ export interface AudioSink {
  * 恒久強化(祭壇)からエンジンへ渡される開始時ボーナス。
  * メタ層(profile)が算出し、エンジンは派生ステータス計算で反映するだけ。
  */
+/** 奥義(Ultimate)の定義。血月ゲージが満ちた時に最多流派のものが放たれる。 */
+export interface UltimateDef {
+  school: SchoolId;
+  name: string;
+  desc: string; // 一言(HUDツールチップ・演出テキスト用)
+  color: string;
+  dur: number; // 効果時間(秒)
+  tick: number; // 周期処理の間隔(秒)。0 = 周期なし(刻停など)
+  damage: number; // 1周期あたりの威力基準(might が乗る)
+  radius: number; // 影響半径(月蝕/夜宴)。0 = 半径を使わない
+}
+
 export interface MetaBonus {
   maxHpMul: number; // 最大HP倍率
   mightMul: number; // 攻撃力倍率

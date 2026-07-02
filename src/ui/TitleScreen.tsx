@@ -146,6 +146,9 @@ export default function TitleScreen({ onStart, onCodex, onAltar, onTreasury, pro
               <kbd>Space</kbd> 回避
             </span>
             <span>
+              <kbd>E</kbd> 奥義
+            </span>
+            <span>
               <kbd>Esc</kbd> 休息
             </span>
             <span>

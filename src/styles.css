@@ -141,6 +141,43 @@ button {
   text-align: right;
 }
 
+/* ── 奥義ゲージ(血月)。討伐で新月→満月に満ち、E で解放 ── */
+.ult-moon {
+  --uc: var(--gold);
+  position: relative;
+  width: calc(46px * var(--hud-scale));
+  height: calc(46px * var(--hud-scale));
+}
+.ult-moon-svg { width: 100%; height: 100%; display: block; }
+.ult-moon .moon-back { fill: rgba(12, 8, 20, 0.78); }
+.ult-moon .moon-lit { fill: color-mix(in srgb, var(--uc) 75%, #ffe9c9); }
+.ult-moon .moon-rim { fill: none; stroke: rgba(232, 220, 195, 0.4); stroke-width: 1.2; }
+.ult-moon.ready {
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--uc) 75%, transparent));
+  animation: ult-ready-pulse 1.6s ease-in-out infinite;
+}
+@keyframes ult-ready-pulse {
+  0%, 100% { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--uc) 55%, transparent)); }
+  50% { filter: drop-shadow(0 0 16px color-mix(in srgb, var(--uc) 90%, transparent)); }
+}
+.ult-moon.active .moon-lit { fill: #fff2dd; }
+.ult-key {
+  position: absolute;
+  left: 50%;
+  bottom: calc(-7px * var(--hud-scale));
+  transform: translateX(-50%);
+}
+.ult-key kbd {
+  font-size: calc(9.5px * var(--hud-scale));
+  padding: 0 5px;
+  color: var(--ink);
+  background: var(--gold);
+  border-color: var(--gold);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ult-moon.ready { animation: none; }
+}
+
 .chip {
   display: inline-flex;
   align-items: center;

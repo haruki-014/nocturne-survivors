@@ -38,6 +38,7 @@ import {
   REGULAR_KINDS,
   SCHOOLS,
   schoolTier,
+  ULTIMATES,
   variantTuning,
   weaponArchetype,
   weaponStatBadges,
@@ -165,6 +166,8 @@ export class Engine {
   private collectedCurios = new Set<string>(); // 収集済み遺物(未収集のものだけを落とす)
   private nextCurioTime = Infinity; // 次に遺物を落とす時刻(秒)
   private revivesLeft = 0; // 遺物「枯れぬ薔薇」による残り復活回数(ラン毎に初期化)
+  private ultTick = 0; // 奥義の周期処理タイマー
+  private ultAnnounced = false; // 「血月が満ちた」の告知を1回に抑える
   private levelPending = 0;
   private slowmo = 0; // 撃破演出のスローモー残り秒
   private victoryDelay = 0; // ボス撃破後、勝利画面までの余韻秒
@@ -180,6 +183,8 @@ export class Engine {
       this.rollRequested = true;
       if (e.code === "Space") e.preventDefault(); // ページのスクロールを抑止
     }
+    // E で奥義(血月が満ちている時のみ)。押し始めの一回のみ受理。
+    if (e.code === "KeyE" && !e.repeat) this.tryUltimate();
   };
   private onKeyUp = (e: KeyboardEvent) => this.keys.delete(e.code);
   private onBlur = () => this.keys.clear();
@@ -255,6 +260,8 @@ export class Engine {
     this.hudTimer = 0;
     this.pause = "none";
     this.revivesLeft = this.metaBonus.reviveCount; // 遺物「枯れぬ薔薇」の復活回数
+    this.ultTick = 0;
+    this.ultAnnounced = false;
     this.pushHud();
     this.audio?.setScene("battle"); // 戦闘 BGM を開始(タイトルの menu から切替)
     this.beginGrace(1.6 + this.metaBonus.graceAdd); // 夜の始まり: 構えの間(遺物で延長可)
@@ -330,6 +337,7 @@ export class Engine {
         level: 1, xp: 0, xpNext: xpNeeded(1),
         dirX: 1, dirY: 0, moving: false, invuln: 0, anim: 0,
         stamina: STAMINA_MAX, staminaMax: STAMINA_MAX, roll: 0, rollDirX: 1, rollDirY: 0,
+        castT: 0, castMax: 0.001, castAng: 0, castKind: "cast",
       },
       derived: {
         speed: 175, maxHp, might: 1, cooldown: 1,
@@ -352,6 +360,7 @@ export class Engine {
       skinId: this.skinId,
       sigWield: false,
       sigColor: SKINS_BY_ID[this.skinId]?.lantern ?? "#d9a441",
+      ultCharge: 0, ultActive: null, timeStop: 0,
     };
   }
 
@@ -404,13 +413,19 @@ export class Engine {
     this.recomputeDerived();    // パッシブ+恒久強化から今の総合性能(速度/威力/間隔…)を導出
     this.updatePlayer(dt);      // キー入力で移動、無敵時間・再生・聖域境界の処理
     this.updateWeapons(dt);     // 各武器のクールダウンを進め、来たものは発射
+    this.updateUltimate(dt);    // 奥義の進行(千刃の刃輪・月蝕の灼熱・夜宴の吸血…)
     this.updateProjectiles(dt); // 弾を前進させ、近傍の敵と当たり判定(貫通を消費)
-    this.updateEnemies(dt);     // 敵をプレイヤーへ寄せる/夜術師は間合い取り、接触ダメージ
-    this.updateEnemyShots(dt);  // 夜術師の呪弾を前進させ自機にのみ当てる
-    this.updateShockwaves(dt);  // ボスの衝波(拡大リング)を広げ、環帯通過で自機に当てる
+    if (w.timeStop > 0) {
+      // 霊奥義「刻停」: 敵・敵弾・衝波・湧きが凍る(武器と自機は動き続ける)
+      w.timeStop = Math.max(0, w.timeStop - dt);
+    } else {
+      this.updateEnemies(dt);     // 敵をプレイヤーへ寄せる/夜術師は間合い取り、接触ダメージ
+      this.updateEnemyShots(dt);  // 夜術師の呪弾を前進させ自機にのみ当てる
+      this.updateShockwaves(dt);  // ボスの衝波(拡大リング)を広げ、環帯通過で自機に当てる
+      this.updateSpawner(dt);     // 時刻に応じて雑魚/エリート/ボス/夜術師を視界外に湧かす
+    }
     this.updateGems(dt);        // 経験石・道具を磁力で吸い寄せ、触れたら取得
     this.updateEffects(dt);     // パーティクル/数字/雷/画面揺れ・赤フラッシュの減衰
-    this.updateSpawner(dt);     // 時刻に応じて雑魚/エリート/ボス/夜術師を視界外に湧かす
 
     // HUD は ~8Hz で送る(React の再レンダリングを抑える)
     this.hudTimer -= realDt;
@@ -621,6 +636,7 @@ export class Engine {
     }
 
     p.invuln = Math.max(0, p.invuln - dt);
+    p.castT = Math.max(0, p.castT - dt); // 攻撃モーションの減衰
     if (w.derived.regen > 0) p.hp = Math.min(p.maxHp, p.hp + w.derived.regen * dt);
 
     // 聖域の境界: ここから先へは出られない(無限に逃げ続けることはできない)
@@ -681,6 +697,100 @@ export class Engine {
     }
   }
 
+  // ---------- 奥義(Ultimate) ----------
+
+  /** いま最多の流派(同数は SCHOOLS の定義順=鋼>霊>月>血 で先勝ち)。武器は常に1つ以上あるので必ず定まる。 */
+  private dominantSchool(): SchoolId {
+    const c = this.schoolCounts();
+    let best: SchoolId = "steel";
+    let bestN = -1;
+    for (const s of Object.values(SCHOOLS)) {
+      if (c[s.id] > bestN) { bestN = c[s.id]; best = s.id; }
+    }
+    return best;
+  }
+
+  /** E 押下。血月が満ちていれば最多流派の奥義を解放する。 */
+  private tryUltimate(): void {
+    const w = this.world;
+    if (this.pause !== "none" || w.grace > 0) return;
+    if (w.ultCharge < 1 || w.ultActive) return;
+    const school = this.dominantSchool();
+    const def = ULTIMATES[school];
+    w.ultCharge = 0;
+    w.ultActive = { school, t: 0, dur: def.dur };
+    this.ultTick = 0;
+    this.ultAnnounced = false; // 次に満ちた時また告げる
+    // 解放の見せ場: 減速・震動・銘の顕現・号砲
+    this.slowmo = Math.max(this.slowmo, 0.5);
+    w.shake = Math.min(1, w.shake + 0.5);
+    w.texts.push({ x: w.player.x, y: w.player.y - 46, text: `奥義「${def.name}」`, life: 2.2, color: def.color, size: 20 });
+    this.burst(w.player.x, w.player.y, 26, def.color, 3.4);
+    this.audio?.cue("ult");
+    if (school === "spirit") w.timeStop = def.dur; // 刻停: 敵と敵弾を凍らせる
+  }
+
+  /** 奥義の進行。流派ごとの周期処理(千刃の刃輪 / 月蝕の灼熱 / 夜宴の吸血)を刻む。 */
+  private updateUltimate(dt: number): void {
+    const w = this.world;
+    const ua = w.ultActive;
+    if (!ua) return;
+    ua.t += dt;
+    const def = ULTIMATES[ua.school];
+    const might = w.derived.might;
+    if (def.tick > 0) {
+      this.ultTick -= dt;
+      if (this.ultTick <= 0) {
+        this.ultTick = def.tick;
+        if (ua.school === "steel") {
+          // 千刃・満月輪: 全方位の刃輪(貫通∞)。波ごとに位相をずらして満遍なく薙ぐ
+          const n = 16;
+          const base = ua.t * 2.4; // 波ごとの回転
+          for (let i = 0; i < n; i++) {
+            const ang = base + (i / n) * TAU;
+            w.projectiles.push({
+              kind: "knife", x: w.player.x, y: w.player.y,
+              vx: Math.cos(ang) * 540, vy: Math.sin(ang) * 540,
+              damage: def.damage * might, radius: KNIFE_RADIUS, pierce: 999,
+              life: 0.9, angle: ang, spin: 0, hit: new Set(),
+              color: "#e8f0ff",
+            });
+          }
+          this.audio?.cue("atkKnife");
+        } else if (ua.school === "moon") {
+          // 月蝕・白夜: 広大な半径の灼熱を周期で焼く
+          for (const e of [...w.enemies]) {
+            if ((e.x - w.player.x) ** 2 + (e.y - w.player.y) ** 2 < def.radius * def.radius) {
+              this.damageEnemy(e, def.damage * might, def.color);
+            }
+          }
+          this.burst(w.player.x, w.player.y, 10, def.color, 3);
+        } else if (ua.school === "blood") {
+          // 血の夜宴: 半径内の命を吸い上げて緋に変える
+          let hits = 0;
+          for (const e of [...w.enemies]) {
+            if ((e.x - w.player.x) ** 2 + (e.y - w.player.y) ** 2 < def.radius * def.radius) {
+              this.damageEnemy(e, def.damage * might, def.color);
+              hits++;
+              // 緋の雫が自機へ流れる(帯域は particles 上限で自然に律速)
+              if (w.particles.length < 240) {
+                w.particles.push({
+                  x: e.x, y: e.y,
+                  vx: (w.player.x - e.x) * 1.6, vy: (w.player.y - e.y) * 1.6,
+                  life: 0.55, maxLife: 0.55, size: 2.6, color: def.color, grav: 0,
+                });
+              }
+            }
+          }
+          if (hits > 0) {
+            w.player.hp = Math.min(w.player.maxHp, w.player.hp + Math.min(12, 1.2 * hits));
+          }
+        }
+      }
+    }
+    if (ua.t >= ua.dur) w.ultActive = null;
+  }
+
   private nearestEnemies(n: number, maxDist: number): Enemy[] {
     const p = this.world.player;
     const within = this.world.enemies
@@ -690,14 +800,25 @@ export class Engine {
     return within.slice(0, n).map((o) => o.e);
   }
 
+  /** 攻撃モーションを張る(描画が castT の減衰を読んで振り・詠唱・刻印を描く)。 */
+  private beginCast(kind: "slash" | "cast" | "rune", ang: number, dur = 0.2): void {
+    const p = this.world.player;
+    p.castT = dur;
+    p.castMax = dur;
+    p.castAng = ang;
+    p.castKind = kind;
+  }
+
   private fireGrimoire(amount: number, st: { damage: number; speed: number; pierce: number; duration: number }, might: number, vis?: WeaponVis): void {
     const p = this.world.player;
     const targets = this.nearestEnemies(amount, BOLT_AIM_RANGE);
+    let castSet = false;
     for (let i = 0; i < amount; i++) {
       const tgt = targets[i % Math.max(1, targets.length)];
       let ang: number;
       if (tgt) ang = Math.atan2(tgt.y - p.y, tgt.x - p.x) + (i >= targets.length ? (Math.random() - 0.5) * 0.5 : 0);
       else ang = Math.random() * TAU;
+      if (!castSet) { this.beginCast("cast", ang); castSet = true; }
       this.world.projectiles.push({
         kind: "bolt", x: p.x, y: p.y,
         vx: Math.cos(ang) * st.speed, vy: Math.sin(ang) * st.speed,
@@ -723,6 +844,7 @@ export class Engine {
         }
       }
     }
+    this.beginCast("slash", base, 0.18);
     for (let i = 0; i < amount; i++) {
       const ang = ring ? base + (i / amount) * TAU : base + (i - (amount - 1) / 2) * KNIFE_SPREAD;
       const side = ring ? 0 : (i - (amount - 1) / 2) * KNIFE_FAN_GAP;
@@ -742,6 +864,7 @@ export class Engine {
     const p = this.world.player;
     const boomA = BOOM_A * area;
     const boomB = BOOM_B * area;
+    this.beginCast("slash", Math.atan2(p.dirY, p.dirX), 0.22);
     // 開始位相 π = 楕円の自機側端点(全個体ここから発つ)。θ 増加で「前方→側→後方→自機」と一周。
     const startAngle = Math.PI;
     // 全一周(2π)で自機に戻る。ライフは角速度から逆算した一周所要時間。
@@ -774,6 +897,7 @@ export class Engine {
     const halfH = this.vh / 2;
     const candidates = w.enemies.filter((e) => Math.abs(e.x - p.x) <= halfW && Math.abs(e.y - p.y) <= halfH);
     if (candidates.length === 0) return;
+    this.beginCast("rune", 0, 0.26); // 天へ乞う刻印(足元の魔法陣)
     const col = vis?.color ?? "#ffd95e"; // 固有技なら主色(氷牙=氷青, 王権=紫紺)
     for (let i = 0; i < amount; i++) {
       const tgt = candidates[Math.floor(Math.random() * candidates.length)];
@@ -1341,8 +1465,25 @@ export class Engine {
     if (w.derived.lifesteal > 0) {
       w.player.hp = Math.min(w.player.maxHp, w.player.hp + w.derived.lifesteal);
     }
+    // 奥義: 討伐で血月が満ちる(強敵ほど大きく)。満ちた瞬間だけ告げる。
+    if (w.ultCharge < 1) {
+      const gain = e.kind === "boss" ? 0.25 : e.kind === "elite" ? 0.08 : e.variant !== "normal" ? 0.03 : 0.008;
+      w.ultCharge = Math.min(1, w.ultCharge + gain);
+      if (w.ultCharge >= 1 && !this.ultAnnounced) {
+        this.ultAnnounced = true;
+        w.texts.push({ x: w.player.x, y: w.player.y - 44, text: "血月が満ちた ── E", life: 2.4, color: "#d9a441", size: 16 });
+        this.audio?.cue("select");
+      }
+    }
     const bossCol = e.kind === "boss" ? BOSSES_BY_ID[e.bossType ?? ""]?.color ?? ENEMIES.boss.color : ENEMIES[e.kind].color;
     this.burst(e.x, e.y, e.kind === "boss" ? 40 : 6, bossCol, e.kind === "boss" ? 5 : 2.2);
+    // 魂の燐光: 撃破ごとに一片、ゆっくり天へ昇る(豪華さの小さな積み増し)
+    if (w.particles.length < 240) {
+      w.particles.push({
+        x: e.x, y: e.y - 6, vx: (Math.random() - 0.5) * 18, vy: -34 - Math.random() * 20,
+        life: 0.9, maxLife: 0.9, size: 2.2, color: "#e8dcc3", grav: -30,
+      });
+    }
 
     if (e.kind === "boss") {
       w.boss = null;
@@ -1924,6 +2065,18 @@ export class Engine {
       bossHp: w.boss
         ? { hp: Math.max(0, w.boss.hp), max: w.boss.maxHp, name: BOSSES_BY_ID[w.boss.bossType ?? ""]?.name ?? ENEMIES.boss.name }
         : null,
+      ult: (() => {
+        const school = w.ultActive?.school ?? this.dominantSchool();
+        const def = ULTIMATES[school];
+        return {
+          charge: w.ultCharge,
+          ready: w.ultCharge >= 1 && !w.ultActive,
+          active: !!w.ultActive,
+          name: def.name,
+          color: def.color,
+          school,
+        };
+      })(),
     };
     this.emit({ type: "hud", hud });
   }

@@ -23,6 +23,7 @@ import type {
   PassiveDef,
   PassiveId,
   SchoolId,
+  UltimateDef,
   WeaponBehavior,
   WeaponDef,
   WeaponId,
@@ -648,6 +649,55 @@ export function schoolBonusText(id: SchoolId, tier: number): string {
   };
   return T[id][tier - 1];
 }
+
+// ------------------------------------------------------------
+// 奥義(Ultimate) ── 討伐で血月ゲージが満ち、E で解放する必殺技。
+//   放たれる中身は「その時点で最多の流派」で決まる(同数は鋼>霊>月>血の順で先勝ち)。
+//   数値はここだけで調整できる。挙動は engine.updateUltimate / activateUltimate。
+// ------------------------------------------------------------
+
+export const ULTIMATES: Record<SchoolId, UltimateDef> = {
+  steel: {
+    school: "steel",
+    name: "千刃・満月輪",
+    desc: "満月を模した刃の暴風。全方位へ貫通の刃輪を撒き続ける。",
+    color: "#cfd8e6",
+    dur: 3,
+    tick: 0.35, // 刃輪の発生間隔
+    damage: 24, // 刃1枚の威力(might 乗算)
+    radius: 0,
+  },
+  spirit: {
+    school: "spirit",
+    name: "刻停・静寂",
+    desc: "刻が止まる。骸も呪弾も凍りつき、武器だけが唄い続ける。",
+    color: "#9d7bff",
+    dur: 4, // 凍結時間
+    tick: 0,
+    damage: 0,
+    radius: 0,
+  },
+  moon: {
+    school: "moon",
+    name: "月蝕・白夜",
+    desc: "月光が夜を白く染め、視界の果てまで不浄を灼き続ける。",
+    color: "#ffd66a",
+    dur: 3,
+    tick: 0.45, // 灼熱の周期
+    damage: 30, // 1周期の威力(might 乗算)
+    radius: 460, // 灼熱の半径
+  },
+  blood: {
+    school: "blood",
+    name: "血の夜宴",
+    desc: "宴の始まり。周囲の命を吸い上げ、おのが緋に変える。",
+    color: "#e0455e",
+    dur: 2.2,
+    tick: 0.22, // 吸血の周期
+    damage: 12, // 1周期・1体あたりの吸血量(might 乗算)
+    radius: 340, // 宴の半径
+  },
+};
 
 // ------------------------------------------------------------
 // パッシブ (最大6スロット)
