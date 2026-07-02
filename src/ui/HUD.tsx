@@ -86,17 +86,20 @@ export default function HUD({ hud }: Props) {
       {lowHp && <div className="lowhp-vignette" />}
 
       <div className="hud-top">
-        <div className="xpbar">
-          <div style={{ width: `${xpPct}%` }} />
+        {/* XPバー: VS流に最上段全幅、右端にレベル(バーとレベルの因果を1本にまとめる) */}
+        <div className="xp-track">
+          <div className="xpbar">
+            <div style={{ width: `${xpPct}%` }} />
+          </div>
+          <span className="xp-lv" aria-label={`レベル ${hud.level}`}>
+            <i>LV</i>
+            {hud.level}
+          </span>
         </div>
 
         <div className="hud-row">
           <div className="hud-left">
             <div className="vitals">
-              <div className="lvl-orb">
-                <span className="cap">LV</span>
-                <span className="n">{hud.level}</span>
-              </div>
               <div className="bars">
                 <div className={`hpbar${lowHp ? " low" : ""}`}>
                   <div className="hp-fill" style={{ width: `${hpPct}%` }} />
@@ -117,7 +120,6 @@ export default function HUD({ hud }: Props) {
           </div>
 
           <div className="hud-right">
-            <UltMoon ult={hud.ult} />
             <span className="chip kills-chip">
               <span className="label">討伐</span>
               {hud.kills}
@@ -153,6 +155,11 @@ export default function HUD({ hud }: Props) {
             <span className="dawn-fill" style={{ width: `${dawnPct}%` }} />
           </span>
         )}
+      </div>
+
+      {/* 奥義(血月): 押すものは視線の近くに ── 画面下部中央のドック(Soulstone/DMD流) */}
+      <div className="ult-dock">
+        <UltMoon ult={hud.ult} />
       </div>
 
       {hud.bossHp && (

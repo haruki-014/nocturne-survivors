@@ -178,15 +178,17 @@ export default function EndScreen({ victory, stats, unlocked, unlockedSkins, sou
           <button className="btn" onClick={onRetry} autoFocus>
             もう一夜
           </button>
-          <button className="btn ghost" onClick={onAltar}>
-            祭壇へ ── 魂を捧げる
-          </button>
-          <button className="btn ghost" onClick={onCodex}>
-            記録の間
-          </button>
-          <button className="btn ghost" onClick={onTitle}>
-            タイトルへ
-          </button>
+          <div className="btn-row">
+            <button className="btn ghost" onClick={onAltar}>
+              祭壇
+            </button>
+            <button className="btn ghost" onClick={onCodex}>
+              記録の間
+            </button>
+            <button className="btn ghost" onClick={onTitle}>
+              タイトルへ
+            </button>
+          </div>
         </div>
       </div>
     </div>

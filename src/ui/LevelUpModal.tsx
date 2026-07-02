@@ -129,6 +129,10 @@ export default function LevelUpModal({ choices, onPick, hud, skinId }: Props) {
   return (
     <div className="overlay dim">
       <div className="levelup" role="dialog" aria-label="アルカナを選ぶ">
+        {/* 補助機能(系統樹)は主導線(カード)から外し、右上コーナーへ */}
+        <button className="btn ghost levelup-tree-corner" onClick={() => setShowTree(true)}>
+          <Sigil name="star4" className="tree-toggle-ico" /> 系統樹 <kbd>Tab</kbd>
+        </button>
         <div className="levelup-title">月 詠 の 刻</div>
         <div className="levelup-sub">── 一枚のアルカナを引け ──</div>
         {/* choicesが入れ替わったらカードを再マウントしてドローアニメをやり直す */}
@@ -222,9 +226,25 @@ export default function LevelUpModal({ choices, onPick, hud, skinId }: Props) {
             );
           })}
         </div>
-        <button className="btn ghost levelup-tree-toggle" onClick={() => setShowTree(true)}>
-          <Sigil name="star4" className="tree-toggle-ico" /> 系統樹を視る <kbd>Tab</kbd>
-        </button>
+        {/* 現在のビルド帯: 選んでいる最中も手持ちが見える(Death Must Die 流) */}
+        {hud && (hud.weapons.length > 0 || hud.passives.length > 0) && (
+          <div className="lu-build" aria-label="現在のビルド">
+            {hud.weapons.map((s) => (
+              <span key={s.id} className="lu-slot" title={`${s.name} Lv.${s.level}`} style={{ "--slot-color": s.color } as React.CSSProperties}>
+                <Sigil name={s.icon} />
+                <i>{s.level}</i>
+              </span>
+            ))}
+            {hud.passives.length > 0 && <span className="lu-sep" aria-hidden="true" />}
+            {hud.passives.map((s) => (
+              <span key={s.id} className="lu-slot" title={`${s.name} Lv.${s.level}`} style={{ "--slot-color": s.color } as React.CSSProperties}>
+                <Sigil name={s.icon} />
+                <i>{s.level}</i>
+              </span>
+            ))}
+          </div>
+        )}
+
         <div className="levelup-hint" aria-hidden="true">
           <kbd>A</kbd><kbd>D</kbd> 選ぶ　<kbd>Enter</kbd>/<kbd>Space</kbd> 決定　<kbd>1</kbd>–<kbd>3</kbd> 直接選択　<kbd>Tab</kbd> 系統樹
         </div>

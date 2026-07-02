@@ -93,22 +93,6 @@ export default function TitleScreen({ onStart, onCodex, onAltar, onTreasury, pro
             <br />
             灯を掲げ、夜明けまで ── 生き延びよ。
           </p>
-        </div>
-
-        <div className="btn-col">
-          <button className="btn" onClick={onStart} autoFocus>
-            夜に踏み出す
-          </button>
-          <button className="btn ghost" onClick={onAltar}>
-            祭壇 ── 魂を捧げる
-            {profile.souls > 0 && <span className="btn-tag">{profile.souls.toLocaleString()} 魂</span>}
-          </button>
-          <button className="btn ghost" onClick={onTreasury}>
-            宝物庫 ── 装備
-          </button>
-          <button className="btn ghost" onClick={onCodex}>
-            記録の間
-          </button>
 
           {played && (
             <div className="home-stats" aria-label="戦績の要約">
@@ -134,8 +118,25 @@ export default function TitleScreen({ onStart, onCodex, onAltar, onTreasury, pro
               </span>
             </div>
           )}
+        </div>
 
-          <div className="controls-hint">
+        <div className="btn-col">
+          <button className="btn" onClick={onStart} autoFocus>
+            夜に踏み出す
+          </button>
+          <button className="btn ghost" onClick={onAltar}>
+            祭壇 ── 魂を捧げる
+            {profile.souls > 0 && <span className="btn-tag">{profile.souls.toLocaleString()} 魂</span>}
+          </button>
+          <button className="btn ghost" onClick={onTreasury}>
+            宝物庫 ── 装備
+          </button>
+          <button className="btn ghost" onClick={onCodex}>
+            記録の間
+          </button>
+        </div>
+
+        <div className="controls-hint">
             <span>
               <kbd>WASD</kbd> / <kbd>←↑↓→</kbd> 移動
             </span>
@@ -154,7 +155,6 @@ export default function TitleScreen({ onStart, onCodex, onAltar, onTreasury, pro
             <span>
               <kbd>F</kbd> 全画面
             </span>
-          </div>
         </div>
       </div>
     </div>

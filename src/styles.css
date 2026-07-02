@@ -107,12 +107,39 @@ button {
   padding: calc(10px * var(--hud-scale)) calc(14px * var(--hud-scale)) 0;
 }
 
+/* XPの帯: バー＋右端のレベルチップ(VS流: バーとレベルを一本の因果で見せる) */
+.xp-track {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--hud-scale));
+}
 .xpbar {
+  flex: 1;
   height: calc(10px * var(--hud-scale));
   background: rgba(22, 16, 34, 0.85);
   border: 1px solid var(--panel-edge);
   border-radius: 99px;
   overflow: hidden;
+}
+.xp-lv {
+  flex: none;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: calc(14px * var(--hud-scale));
+  font-weight: 700;
+  color: var(--bone);
+  padding: calc(1px * var(--hud-scale)) calc(9px * var(--hud-scale));
+  background: rgba(22, 16, 34, 0.85);
+  border: 1px solid var(--panel-edge);
+  border-radius: 99px;
+}
+.xp-lv i {
+  font-style: normal;
+  font-size: calc(9px * var(--hud-scale));
+  letter-spacing: 0.08em;
+  color: var(--gold);
 }
 
 .xpbar > div {
@@ -249,13 +276,26 @@ button {
 }
 
 /* ボスHPバー */
+/* ボスバー: 上部中央(タイマー直下)。下部中央は奥義ドックに明け渡す(DMD/Hades流) */
 .bossbar {
   position: absolute;
-  bottom: calc(22px * var(--hud-scale));
+  top: calc(96px * var(--hud-scale));
   left: 50%;
   transform: translateX(-50%);
   width: min(560px, 70vw);
   text-align: center;
+}
+
+/* 奥義ドック: 画面下部中央。「押すボタン」を視線の近くに置く(Soulstone/DMD流) */
+.ult-dock {
+  position: absolute;
+  bottom: calc(26px * var(--hud-scale));
+  left: 50%;
+  transform: translateX(-50%);
+}
+.ult-dock .ult-moon {
+  width: calc(58px * var(--hud-scale));
+  height: calc(58px * var(--hud-scale));
 }
 
 .bossbar .name {
@@ -285,11 +325,66 @@ button {
 /* ---------- アルカナカード(シグネチャ) ---------- */
 
 .levelup {
+  position: relative; /* 右上コーナーの系統樹ボタンの基準 */
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 26px;
+  gap: 22px;
 }
+
+/* 系統樹はカード(主導線)から外して右上コーナーに常駐 */
+.levelup-tree-corner {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  padding: 6px 14px;
+}
+
+/* 現在のビルド帯: カードの下に手持ちの武器/加護を一列で見せる */
+.lu-build {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-edge);
+  box-shadow: 0 1px 0 var(--glass-rim) inset;
+}
+.lu-slot {
+  --slot-color: var(--bone-dim);
+  position: relative;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--slot-color);
+  background: color-mix(in srgb, var(--slot-color) 12%, rgba(10, 6, 18, 0.6));
+  border: 1px solid color-mix(in srgb, var(--slot-color) 45%, var(--glass-edge));
+}
+.lu-slot svg { width: 16px; height: 16px; }
+.lu-slot i {
+  position: absolute;
+  right: -3px;
+  bottom: -4px;
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 1;
+  padding: 1px 4px;
+  border-radius: 6px;
+  color: var(--bone);
+  background: rgba(10, 6, 18, 0.9);
+  border: 1px solid var(--glass-edge);
+}
+.lu-sep { width: 1px; height: 20px; background: var(--panel-edge); margin: 0 3px; }
 
 .levelup-title {
   font-family: var(--font-display-jp);
@@ -499,6 +594,21 @@ button {
   border-color: var(--bone-dim);
   box-shadow: none;
 }
+
+/* 副次ボタンの横並び(primary 1つ＋secondary 横一列の定石) */
+.btn-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.btn-row > .btn {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  padding: 9px 8px;
+  white-space: nowrap;
+}
+.btn-row > .btn-sm { flex: none; padding: 7px 22px; }
 
 .btn-col {
   display: flex;
@@ -760,19 +870,27 @@ input[type="range"] {
 .title-scene > *:nth-child(2) { animation-delay: 0.22s; }
 .title-scene > *:nth-child(3) { animation-delay: 0.40s; }
 
-/* ── ワイド画面: 2カラムで画面全体を使う(左=銘 / 右=メニュー / 下段=飾り棚) ── */
+/* タイトルの操作ヒント: 画面下端の細い帯(中央寄せ)。ヒーロー帯(下部常駐)の直上に敷く */
+.title-scene > .controls-hint {
+  justify-content: center;
+  margin-top: 10px;
+}
+
+/* ── ワイド画面: 2カラム(左=銘+戦績 / 右=メニュー一直線)＋下端=操作ヒント帯 ── */
 @media (min-width: 880px) and (min-height: 480px) {
   .title-scene {
     display: grid;
     grid-template-columns: 1.05fr 0.95fr;
-    grid-template-areas: "brand menu";
+    grid-template-areas:
+      "brand menu"
+      "hint hint";
     align-content: center;
     align-items: center;
     justify-items: center;
     width: min(1180px, 92vw);
     margin: 0 auto;
     column-gap: clamp(40px, 7vw, 120px);
-    row-gap: clamp(24px, 4vh, 56px);
+    row-gap: clamp(20px, 3.5vh, 48px);
     padding: 40px 40px 104px;
   }
   .title-brand {
@@ -788,11 +906,15 @@ input[type="range"] {
     width: min(380px, 38vw);
     margin-top: 0;
   }
-  /* 左寄せに合わせて飾り罫・戦績・操作ヒントの起点も左へ */
+  .title-scene > .controls-hint {
+    grid-area: hint;
+    justify-content: center;
+    margin-top: 0;
+  }
+  /* 左寄せに合わせて飾り罫・戦績の起点も左へ */
   .title-brand .ornament { justify-content: flex-start; }
   .title-brand .title-tagline { text-align: left; }
-  .title-scene .btn-col .home-stats { justify-content: flex-start; }
-  .title-scene .btn-col .controls-hint { justify-content: flex-start; }
+  .title-brand .home-stats { justify-content: flex-start; }
 }
 
 /* ── 縦が低い画面: 各要素を引き締めて、一定サイズまで切れずに収める ── */
@@ -1972,38 +2094,6 @@ input[type="range"] {
   align-items: center;
   gap: calc(8px * var(--hud-scale));
 }
-.lvl-orb {
-  position: relative;
-  width: calc(40px * var(--hud-scale));
-  height: calc(40px * var(--hud-scale));
-  border-radius: 50%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  background:
-    radial-gradient(circle at 50% 30%, rgba(217, 164, 65, 0.25), rgba(217, 164, 65, 0) 70%),
-    var(--glass-fill);
-  border: 1px solid color-mix(in srgb, var(--gold) 55%, var(--glass-edge));
-  box-shadow: 0 1px 0 var(--glass-rim) inset, 0 6px 16px rgba(0, 0, 0, 0.45), 0 0 14px rgba(217, 164, 65, 0.2);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4);
-  backdrop-filter: blur(14px) saturate(1.4);
-}
-.lvl-orb .cap {
-  font-family: var(--font-display-jp);
-  font-size: calc(8px * var(--hud-scale));
-  letter-spacing: 0.18em;
-  color: var(--gold);
-  margin-bottom: 1px;
-}
-.lvl-orb .n {
-  font-family: var(--font-mono);
-  font-weight: 600;
-  font-size: calc(17px * var(--hud-scale));
-  color: var(--bone);
-}
-
 .hpbar {
   position: relative;
   width: calc(168px * var(--hud-scale));
@@ -3081,14 +3171,6 @@ input[type="range"] {
 
 .skt-close { align-self: center; margin-top: 18px; font-size: 13px; }
 
-/* レベルアップの系統樹トグルボタン */
-.levelup-tree-toggle {
-  margin-top: 16px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-}
 .tree-toggle-ico { width: 16px; height: 16px; color: var(--gold); }
 
 @media (prefers-reduced-motion: reduce) {
