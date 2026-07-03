@@ -503,21 +503,42 @@ function drawAura(v: View): void {
   const p = world.player;
   if (world.auraR > 0) {
     const ar = world.auraR;
+    // 業火の聖域(真化)は金に染まる。基底/未指定は既定の緑。
+    const col = world.auraColor ?? "#7be08a";
     const g = ctx.createRadialGradient(wx(p.x), wy(p.y), ar * 0.4, wx(p.x), wy(p.y), ar);
-    g.addColorStop(0, "rgba(123,224,138,0.04)");
-    g.addColorStop(0.85, "rgba(123,224,138,0.12)");
-    g.addColorStop(1, "rgba(123,224,138,0)");
+    g.addColorStop(0, withAlpha(col, 0.04));
+    g.addColorStop(0.85, withAlpha(col, 0.12));
+    g.addColorStop(1, withAlpha(col, 0));
     ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(wx(p.x), wy(p.y), ar, 0, TAU);
     ctx.fill();
-    ctx.strokeStyle = "rgba(123,224,138,0.28)";
+    ctx.strokeStyle = withAlpha(col, 0.28);
+    ctx.lineWidth = world.auraColor ? 2 : 1; // 真化は縁を厚く
     ctx.setLineDash([6, 8]);
     ctx.lineDashOffset = -world.t * 24;
     ctx.beginPath();
     ctx.arc(wx(p.x), wy(p.y), ar, 0, TAU);
     ctx.stroke();
     ctx.setLineDash([]);
+    if (world.auraColor) {
+      // 業火の聖域: 縁に紋章(四芒)を等間隔で浮かべる(基底には無い格)
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      const n = 6;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * TAU + world.t * 0.3;
+        const gx = wx(p.x) + Math.cos(a) * ar;
+        const gy = wy(p.y) + Math.sin(a) * ar;
+        ctx.strokeStyle = withAlpha(shade(col, 0.3), 0.5);
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        ctx.moveTo(gx - 5, gy); ctx.lineTo(gx + 5, gy);
+        ctx.moveTo(gx, gy - 5); ctx.lineTo(gx, gy + 5);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
   }
 }
 
@@ -836,10 +857,12 @@ function drawPlayer(v: View): void {
   }
   // 攻撃モーション: 発射の瞬間、castT が張られる(進行 1→0)。
   //   踏み込み(lunge)＋僅かな伸縮で「身振り」を、種別ごとの閃きで「技の型」を見せる。
+  //   castColor(真化/固有技)がある時は、その色に染めて一回り大きく(boost)描き「強くなった」を伝える。
   const castP = p.castT > 0 ? p.castT / p.castMax : 0; // 1=振り始め → 0=終わり
   const lunge = castP > 0 && p.castKind !== "rune" ? Math.sin(castP * Math.PI) * 3.2 : 0;
   const lx = Math.cos(p.castAng) * lunge;
   const ly = Math.sin(p.castAng) * lunge;
+  const castBoost = p.castColor ? 1.28 : 1;
 
   // 影
   ctx.fillStyle = "rgba(0,0,0,0.45)";
@@ -847,18 +870,28 @@ function drawPlayer(v: View): void {
   ctx.ellipse(wx(p.x), wy(p.y) + 18, 13, 5, 0, 0, TAU);
   ctx.fill();
 
-  // 刻印(rune): 落雷の詠唱。足元に金の魔法陣が閃く
+  // 刻印(rune): 落雷の詠唱。足元に魔法陣が閃く(真化/固有技は主色に染まり一回り大きい)
   if (castP > 0 && p.castKind === "rune") {
     const a = castP;
+    const runeCol = p.castColor ?? "#ffd95e";
+    const rr0 = (20 + (1 - a) * 8) * castBoost;
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    ctx.strokeStyle = withAlpha("#ffd95e", 0.55 * a);
-    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = withAlpha(runeCol, 0.55 * a);
+    ctx.lineWidth = 1.6 * castBoost;
     ctx.setLineDash([4, 6]);
     ctx.lineDashOffset = world.t * 30;
     ctx.beginPath();
-    ctx.ellipse(wx(p.x), wy(p.y) + 8, 20 + (1 - a) * 8, (20 + (1 - a) * 8) * 0.45, 0, 0, TAU);
+    ctx.ellipse(wx(p.x), wy(p.y) + 8, rr0, rr0 * 0.45, 0, 0, TAU);
     ctx.stroke();
+    if (p.castColor) {
+      // 真化/固有技: 内側にもう一重の環(格の違いを示す)
+      ctx.strokeStyle = withAlpha(shade(runeCol, 0.4), 0.4 * a);
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.ellipse(wx(p.x), wy(p.y) + 8, rr0 * 0.62, rr0 * 0.62 * 0.45, 0, 0, TAU);
+      ctx.stroke();
+    }
     ctx.setLineDash([]);
     ctx.restore();
   }
@@ -873,34 +906,41 @@ function drawPlayer(v: View): void {
   ctx.restore();
 
   // 振り(slash): 刃の弧光。詠唱(cast): 掌の魔力の煌めき。
+  //   castColor があれば主色に染め、弧/光点を castBoost 倍で大きく描く。
   if (castP > 0 && p.castKind !== "rune") {
     const a = castP;
+    const arcR = 22 * castBoost;
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
     if (p.castKind === "slash") {
       // 発射方向へ薙ぐ弧(進行で角度が流れる)
       const sweep = (1 - a) * 1.5 - 0.75; // -0.75 → +0.75 rad
-      ctx.strokeStyle = withAlpha("#e8f0ff", 0.7 * a);
-      ctx.lineWidth = 2.4;
+      const coreCol = p.castColor ? shade(p.castColor, 0.55) : "#e8f0ff";
+      const glowCol = p.castColor ?? "#9fb3d6";
+      ctx.strokeStyle = withAlpha(coreCol, 0.7 * a);
+      ctx.lineWidth = 2.4 * castBoost;
       ctx.beginPath();
-      ctx.arc(wx(p.x), wy(p.y) - 2, 22, p.castAng + sweep - 0.55, p.castAng + sweep + 0.55);
+      ctx.arc(wx(p.x), wy(p.y) - 2, arcR, p.castAng + sweep - 0.55, p.castAng + sweep + 0.55);
       ctx.stroke();
-      ctx.strokeStyle = withAlpha("#9fb3d6", 0.35 * a);
-      ctx.lineWidth = 5;
+      ctx.strokeStyle = withAlpha(glowCol, 0.35 * a);
+      ctx.lineWidth = 5 * castBoost;
       ctx.beginPath();
-      ctx.arc(wx(p.x), wy(p.y) - 2, 22, p.castAng + sweep - 0.4, p.castAng + sweep + 0.4);
+      ctx.arc(wx(p.x), wy(p.y) - 2, arcR, p.castAng + sweep - 0.4, p.castAng + sweep + 0.4);
       ctx.stroke();
     } else {
       // 詠唱の火花: 掌先に主色の光点が弾ける
       const hx = wx(p.x) + Math.cos(p.castAng) * 15;
       const hy = wy(p.y) - 4 + Math.sin(p.castAng) * 15;
-      const g = ctx.createRadialGradient(hx, hy, 1, hx, hy, 10 + (1 - a) * 6);
-      g.addColorStop(0, withAlpha("#efe7ff", 0.8 * a));
-      g.addColorStop(0.5, withAlpha("#9d7bff", 0.5 * a));
-      g.addColorStop(1, withAlpha("#9d7bff", 0));
+      const coreCol = p.castColor ? shade(p.castColor, 0.7) : "#efe7ff";
+      const midCol = p.castColor ?? "#9d7bff";
+      const sparkR = (10 + (1 - a) * 6) * castBoost;
+      const g = ctx.createRadialGradient(hx, hy, 1, hx, hy, sparkR);
+      g.addColorStop(0, withAlpha(coreCol, 0.8 * a));
+      g.addColorStop(0.5, withAlpha(midCol, 0.5 * a));
+      g.addColorStop(1, withAlpha(midCol, 0));
       ctx.fillStyle = g;
       ctx.beginPath();
-      ctx.arc(hx, hy, 10 + (1 - a) * 6, 0, TAU);
+      ctx.arc(hx, hy, sparkR, 0, TAU);
       ctx.fill();
     }
     ctx.restore();
@@ -950,6 +990,32 @@ function drawProjectiles(v: View): void {
           ctx.moveTo(-9, 0); ctx.lineTo(9, 0);
           ctx.moveTo(0, -7); ctx.lineTo(0, 7);
           ctx.stroke();
+        } else if (pr.fx === "codex") {
+          // 禁書・無限詠唱: 尾に淡いルーンが連なる(途切れぬ詠唱の証)
+          ctx.fillStyle = withAlpha(pr.color ?? "#b9a0ff", 0.6);
+          for (let k = 0; k < 3; k++) {
+            const rx = -13 - k * 7;
+            const ry = Math.sin(world.t * 8 + k * 2 + pr.x * 0.02) * 2.4;
+            ctx.beginPath();
+            ctx.arc(rx, ry, 1.6, 0, TAU);
+            ctx.fill();
+          }
+        } else if (pr.fx === "blasphemy") {
+          // 冒涜の聖句: 肥大した芯に禁忌の亀裂リング
+          ctx.strokeStyle = withAlpha(shade(pr.color ?? "#d44a78", -0.2), 0.8);
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.arc(0, 0, 16, 0, TAU);
+          ctx.stroke();
+          ctx.strokeStyle = withAlpha("#1a0a12", 0.5);
+          ctx.lineWidth = 1;
+          for (let k = 0; k < 3; k++) {
+            const a = (k / 3) * TAU + world.t * 2;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(a) * 6, Math.sin(a) * 6);
+            ctx.lineTo(Math.cos(a) * 15, Math.sin(a) * 15);
+            ctx.stroke();
+          }
         }
         break;
       }
@@ -984,6 +1050,17 @@ function drawProjectiles(v: View): void {
           ctx.beginPath();
           ctx.arc(-7, 0, 2.4, 0, TAU);
           ctx.fill();
+        } else if (pr.fx === "galewall") {
+          // 千刃・烈風: 刃に風の弧のストリークが伴う(全方位の刃壁を強調)
+          ctx.strokeStyle = withAlpha(pr.color ?? "#eaf2ff", 0.5);
+          ctx.lineWidth = 1;
+          for (let k = 0; k < 2; k++) {
+            const ry = (k === 0 ? 1 : -1) * 4;
+            ctx.beginPath();
+            ctx.moveTo(-6, ry);
+            ctx.quadraticCurveTo(-13, ry * 1.8, -18, ry * 0.6);
+            ctx.stroke();
+          }
         }
         break;
       }
@@ -1033,6 +1110,17 @@ function drawProjectiles(v: View): void {
         ctx.beginPath();
         ctx.arc(0, 0, r * 0.22, 0, TAU);
         ctx.fill();
+        if (pr.fx === "comet") {
+          // 彗星・帰刃: 翼の後ろに彗星の尾(粒子)を引く(進行の逆方向=ローカル-x側)
+          ctx.globalCompositeOperation = "lighter";
+          for (let k = 1; k <= 4; k++) {
+            const tx2 = -r * 0.5 * k;
+            ctx.fillStyle = withAlpha(glow, 0.28 / k);
+            ctx.beginPath();
+            ctx.arc(tx2, 0, Math.max(1.4, r * 0.14 - k), 0, TAU);
+            ctx.fill();
+          }
+        }
         break;
       }
       case "orb": {
@@ -1075,6 +1163,25 @@ function drawProjectiles(v: View): void {
     ctx.moveTo(wx(p.x), wy(p.y));
     ctx.lineTo(wx(pr.x), wy(pr.y));
     ctx.stroke();
+  }
+
+  // 神罰の聖環(真化): 隣り合う宝珠を弧で結び「環」を成す(名の通りの聖環を見せる)
+  const halo = world.projectiles.filter((pr) => pr.kind === "orb" && pr.fx === "halo");
+  if (halo.length > 1) {
+    halo.sort((a, b) => (a.orbIndex ?? 0) - (b.orbIndex ?? 0));
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.strokeStyle = withAlpha(halo[0].color ?? "#aef0ff", 0.4);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < halo.length; i++) {
+      const a = halo[i];
+      const b = halo[(i + 1) % halo.length];
+      ctx.moveTo(wx(a.x), wy(a.y));
+      ctx.lineTo(wx(b.x), wy(b.y));
+    }
+    ctx.stroke();
+    ctx.restore();
   }
 }
 
@@ -1160,6 +1267,29 @@ function drawBolts(v: View): void {
         ctx.arc(bx + Math.cos(a) * er, by + Math.sin(a) * er, 2, 0, TAU);
         ctx.fill();
       }
+    } else if (b.fx === "chain") {
+      // 神鳴・連雷: 着弾から副次の細い連雷アークが伴う(落雷が連なる様を示す)
+      const branchAng = (b.seed % TAU) - Math.PI;
+      const mx = bx + Math.cos(branchAng) * 24, my = by + Math.sin(branchAng) * 24 - 22;
+      const ex = bx + Math.cos(branchAng) * 46, ey = by + Math.sin(branchAng) * 46 - 6;
+      ctx.strokeStyle = withAlpha(core, alpha * 0.7);
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.lineTo(mx, my);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+    } else if (b.fx === "storm") {
+      // 裁きの嵐: 大きな衝撃環と、雷柱の上端に暗雲の色(極大の落雷を強調)
+      ctx.strokeStyle = withAlpha(glow, alpha * 0.3);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(bx, by, (22 * (1 - b.life) + 8) * 1.8, 0, TAU);
+      ctx.stroke();
+      ctx.fillStyle = withAlpha("#2a2438", alpha * 0.5);
+      ctx.beginPath();
+      ctx.arc(pts[0][0], pts[0][1], 26, 0, TAU);
+      ctx.fill();
     }
   }
   ctx.globalCompositeOperation = "source-over";

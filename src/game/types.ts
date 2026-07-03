@@ -178,7 +178,17 @@ export interface EnemyShot {
 export type ProjectileKind = "bolt" | "knife" | "boomerang" | "orb";
 
 /** 固有技(秘伝)の投射物に宿す専用エフェクト。基底武器は未指定で従来の見た目。 */
-export type ProjectileFx = "frost" | "ember" | "void" | "gold" | "plague" | "crimson" | "royal";
+export type ProjectileFx =
+  | "frost" | "ember" | "void" | "gold" | "plague" | "crimson" | "royal" // 固有技(装いの秘伝)
+  // ── 真化(通常の進化形態)。基底武器と同じ挙動のまま、この見た目タグだけで差別化する ──
+  | "codex" // 禁書・無限詠唱: 尾に淡いルーンが連なる
+  | "blasphemy" // 冒涜の聖句: 肥大した芯に禁忌の亀裂リング
+  | "galewall" // 千刃・烈風: 刃に風の弧のストリーク
+  | "halo" // 神罰の聖環: 隣の宝珠と弧で結ばれる
+  | "sanctuary" // 業火の聖域: オーラが金に染まり縁の紋章が厚くなる
+  | "chain" // 神鳴・連雷: 副次の細い連雷アーク
+  | "storm" // 裁きの嵐: 大きな衝撃環と暗雲の色
+  | "comet"; // 彗星・帰刃: 翼の後ろに彗星の尾
 
 export interface Projectile {
   kind: ProjectileKind;
@@ -274,6 +284,7 @@ export interface Player {
   castMax: number; // モーション総秒(進行率の分母)
   castAng: number; // 発射方向(ラジアン)。rune では未使用
   castKind: "slash" | "cast" | "rune"; // 振り(刃/帰刃) / 詠唱(魔弾) / 刻印(雷)
+  castColor?: string; // 真化/固有技の主色(あれば身のこなしごと染めて一回り大きく描く)
 }
 
 export interface OwnedWeapon {
@@ -324,6 +335,7 @@ export interface World {
   shake: number;
   flash: number; // 被弾時の赤フラッシュ
   auraR: number; // 薫香の現在半径(0=未所持)
+  auraColor?: string; // オーラの主色(業火の聖域=真化時は金。未指定なら基底の緑)
   grace: number; // 再開前の待機(構え)残り秒。>0 の間は時間停止
   graceMax: number; // 待機の総秒(リング表示用)
   visionScale: number; // 視界(ランタン光)の倍率。1=通常、<1=女王の夜啼きで狭まる

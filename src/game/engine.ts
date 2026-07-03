@@ -106,6 +106,8 @@ const BOOM_B = 132; // 進行方向に直交する半径(長軸。B > A で投�
 const BOOM_SPEED = 4.4; // 角速度 rad/s(一周 ≈ 1.43 s。速いほど薙ぎ払い滞空が短い)
 const BOOM_RADIUS = 13; // ヒット半径(宝珠 10 のおよそ 1.3 倍)
 
+const ULT_ACTIVE_CHARGE_MUL = 0.15; // 奥義発動中はチャージ加算をこの倍率まで抑える(奥義連打の防止)
+
 // 被弾フィードバック(プレイヤーが接触/呪弾でダメージを受けたときの共通値)
 const PLAYER_HIT_IFRAME = 0.6; // 被弾後の無敵時間(連続ヒットで一気に溶けるのを防ぐ)
 const PLAYER_HIT_FLASH = 0.3; // 画面の緋い被弾フラッシュの強さ
@@ -672,10 +674,11 @@ export class Engine {
       }
       if (def.behavior === "aura") {
         w.auraR = 86 * st.area * d.area;
+        w.auraColor = vis?.color; // 業火の聖域(真化)は金に染まる。基底/未指定は既定の緑
         ow.tick -= dt;
         if (ow.tick <= 0) {
           ow.tick = st.cooldown * d.cooldown;
-          this.auraTick(w.auraR, st.damage * d.might);
+          this.auraTick(w.auraR, st.damage * d.might, vis?.color);
         }
         continue;
       }
@@ -800,13 +803,17 @@ export class Engine {
     return within.slice(0, n).map((o) => o.e);
   }
 
-  /** 攻撃モーションを張る(描画が castT の減衰を読んで振り・詠唱・刻印を描く)。 */
-  private beginCast(kind: "slash" | "cast" | "rune", ang: number, dur = 0.2): void {
+  /**
+   * 攻撃モーションを張る(描画が castT の減衰を読んで振り・詠唱・刻印を描く)。
+   * color を渡すと(真化/固有技=vis持ちの武器)、描画側がその色に染めて一回り大きく描く。
+   */
+  private beginCast(kind: "slash" | "cast" | "rune", ang: number, dur = 0.2, color?: string): void {
     const p = this.world.player;
     p.castT = dur;
     p.castMax = dur;
     p.castAng = ang;
     p.castKind = kind;
+    p.castColor = color;
   }
 
   private fireGrimoire(amount: number, st: { damage: number; speed: number; pierce: number; duration: number }, might: number, vis?: WeaponVis): void {
@@ -818,7 +825,7 @@ export class Engine {
       let ang: number;
       if (tgt) ang = Math.atan2(tgt.y - p.y, tgt.x - p.x) + (i >= targets.length ? (Math.random() - 0.5) * 0.5 : 0);
       else ang = Math.random() * TAU;
-      if (!castSet) { this.beginCast("cast", ang); castSet = true; }
+      if (!castSet) { this.beginCast("cast", ang, 0.2, vis?.color); castSet = true; }
       this.world.projectiles.push({
         kind: "bolt", x: p.x, y: p.y,
         vx: Math.cos(ang) * st.speed, vy: Math.sin(ang) * st.speed,
@@ -844,7 +851,7 @@ export class Engine {
         }
       }
     }
-    this.beginCast("slash", base, 0.18);
+    this.beginCast("slash", base, 0.18, vis?.color);
     for (let i = 0; i < amount; i++) {
       const ang = ring ? base + (i / amount) * TAU : base + (i - (amount - 1) / 2) * KNIFE_SPREAD;
       const side = ring ? 0 : (i - (amount - 1) / 2) * KNIFE_FAN_GAP;
@@ -864,7 +871,7 @@ export class Engine {
     const p = this.world.player;
     const boomA = BOOM_A * area;
     const boomB = BOOM_B * area;
-    this.beginCast("slash", Math.atan2(p.dirY, p.dirX), 0.22);
+    this.beginCast("slash", Math.atan2(p.dirY, p.dirX), 0.22, vis?.color);
     // 開始位相 π = 楕円の自機側端点(全個体ここから発つ)。θ 増加で「前方→側→後方→自機」と一周。
     const startAngle = Math.PI;
     // 全一周(2π)で自機に戻る。ライフは角速度から逆算した一周所要時間。
@@ -897,7 +904,7 @@ export class Engine {
     const halfH = this.vh / 2;
     const candidates = w.enemies.filter((e) => Math.abs(e.x - p.x) <= halfW && Math.abs(e.y - p.y) <= halfH);
     if (candidates.length === 0) return;
-    this.beginCast("rune", 0, 0.26); // 天へ乞う刻印(足元の魔法陣)
+    this.beginCast("rune", 0, 0.26, vis?.color); // 天へ乞う刻印(足元の魔法陣)
     const col = vis?.color ?? "#ffd95e"; // 固有技なら主色(氷牙=氷青, 王権=紫紺)
     for (let i = 0; i < amount; i++) {
       const tgt = candidates[Math.floor(Math.random() * candidates.length)];
@@ -955,13 +962,14 @@ export class Engine {
     }
   }
 
-  private auraTick(radius: number, damage: number): void {
+  private auraTick(radius: number, damage: number, color?: string): void {
     const w = this.world;
     const p = w.player;
+    const col = color ?? "#7be08a";
     for (const e of w.enemies) {
       const rr = radius + e.radius;
       if ((e.x - p.x) ** 2 + (e.y - p.y) ** 2 < rr * rr) {
-        this.damageEnemy(e, damage, "#7be08a", p.x, p.y, 40);
+        this.damageEnemy(e, damage, col, p.x, p.y, 40);
       }
     }
   }
@@ -1482,8 +1490,10 @@ export class Engine {
       w.player.hp = Math.min(w.player.maxHp, w.player.hp + w.derived.lifesteal);
     }
     // 奥義: 討伐で血月が満ちる(強敵ほど大きく)。満ちた瞬間だけ告げる。
+    // 発動中は加算を大幅に抑える(千刃/月蝕/夜宴の大量討伐で即座に連打できてしまうのを防ぐ)。
     if (w.ultCharge < 1) {
-      const gain = e.kind === "boss" ? 0.25 : e.kind === "elite" ? 0.08 : e.variant !== "normal" ? 0.03 : 0.008;
+      let gain = e.kind === "boss" ? 0.25 : e.kind === "elite" ? 0.08 : e.variant !== "normal" ? 0.03 : 0.008;
+      if (w.ultActive) gain *= ULT_ACTIVE_CHARGE_MUL;
       w.ultCharge = Math.min(1, w.ultCharge + gain);
       if (w.ultCharge >= 1 && !this.ultAnnounced) {
         this.ultAnnounced = true;

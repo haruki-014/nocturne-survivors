@@ -168,6 +168,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     behavior: "bolt",
     school: "spirit",
     evolved: true,
+    fx: "codex",
     statsFor: (lv): WeaponStats => ({
       damage: 26 + 7 * (lv - 1),
       cooldown: 0.5 - 0.03 * (lv - 1),
@@ -188,6 +189,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     behavior: "bolt",
     school: "spirit",
     evolved: true,
+    fx: "blasphemy",
     statsFor: (lv): WeaponStats => ({
       damage: 70 + 22 * (lv - 1),
       cooldown: 1.0 - 0.06 * (lv - 1),
@@ -209,6 +211,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     school: "steel",
     evolved: true,
     ring: true,
+    fx: "galewall",
     statsFor: (lv): WeaponStats => ({
       damage: 18 + 6 * (lv - 1),
       cooldown: 0.7 - 0.05 * (lv - 1),
@@ -229,6 +232,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     behavior: "orbs",
     school: "spirit",
     evolved: true,
+    fx: "halo",
     statsFor: (lv): WeaponStats => ({
       damage: 24 + 8 * (lv - 1),
       cooldown: 0.4,
@@ -249,6 +253,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     behavior: "aura",
     school: "moon",
     evolved: true,
+    fx: "sanctuary",
     statsFor: (lv): WeaponStats => ({
       damage: 16 + 6 * (lv - 1),
       cooldown: 0.4,
@@ -269,6 +274,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     behavior: "lightning",
     school: "moon",
     evolved: true,
+    fx: "chain",
     statsFor: (lv): WeaponStats => ({
       damage: 40 + 14 * (lv - 1),
       cooldown: 1.4 - 0.1 * (lv - 1),
@@ -289,6 +295,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     behavior: "lightning",
     school: "moon",
     evolved: true,
+    fx: "storm",
     statsFor: (lv): WeaponStats => ({
       damage: 70 + 24 * (lv - 1),
       cooldown: 1.8 - 0.12 * (lv - 1),
@@ -309,6 +316,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     behavior: "boomerang",
     school: "steel",
     evolved: true,
+    fx: "comet",
     statsFor: (lv): WeaponStats => ({
       damage: 46 + 16 * (lv - 1),
       cooldown: 1.0 - 0.06 * (lv - 1),
