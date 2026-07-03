@@ -1237,7 +1237,7 @@ export class Engine {
   /** 能力の再チャージ間隔。windup(予備動作)分を見込み従来の体感間隔に揃える。 */
   private abilityInterval(ability: BossAbility): number {
     switch (ability) {
-      case "swarm": return 5.3 + Math.random() * 1.5;
+      case "swarm": return 6.0 + Math.random() * 1.5; // 広範囲・強力化に見合う小さな代償
       case "raise": return 6.8 + Math.random() * 1.5;
       case "wail": return 6.3 + Math.random() * 2.5;
       case "rally": return 4.3 + Math.random() * 1.5;
@@ -1309,17 +1309,32 @@ export class Engine {
     }
   }
 
-  /** 吸血卿の分身: 自身の周囲に蝙蝠の眷属を撒く。 */
+  /**
+   * 吸血卿の眷属召喚: プレイヤーを囲う広いリング(240〜300px)に夜の眷属を喚ぶ。
+   * 構成は蝙蝠主体＋wraith 2体、それぞれ1体は特異種(large/recolor)で「強力な眷属」の圧を出す。
+   * 窮地(HP半分以下)では数が 8→12 に増える(血の渇きの激化)。
+   */
   private summonSwarm(e: Enemy): void {
     const w = this.world;
-    const n = 5;
+    const p = w.player;
+    const n = e.hp < e.maxHp * 0.5 ? 12 : 8;
+    const lim = ARENA_RADIUS - 40;
     this.burst(e.x, e.y, 24, "#ff3d54", 4);
-    w.texts.push({ x: e.x, y: e.y - e.radius - 10, text: "眷属召喚", life: 1.4, color: "#ff6f7e", size: 15 });
+    w.texts.push({ x: e.x, y: e.y - e.radius - 10, text: "血の眷属、来たれ", life: 1.4, color: "#ff6f7e", size: 15 });
+    const base = Math.random() * TAU;
     for (let i = 0; i < n; i++) {
       if (w.enemies.length >= MAX_ENEMIES) break;
-      const ang = (i / n) * TAU + Math.random() * 0.4;
-      const d = e.radius + 24 + Math.random() * 30;
-      this.spawnAt("bat", { x: e.x + Math.cos(ang) * d, y: e.y + Math.sin(ang) * d });
+      const ang = base + (i / n) * TAU + (Math.random() - 0.5) * 0.25;
+      const d = 240 + Math.random() * 60;
+      let x = p.x + Math.cos(ang) * d;
+      let y = p.y + Math.sin(ang) * d;
+      const cd = Math.hypot(x, y);
+      if (cd > lim) { x = (x / cd) * lim; y = (y / cd) * lim; }
+      // 構成: 末尾2体は wraith(疾い追撃)、先頭の蝙蝠1体は大型・wraith 1体は硬化の特異種
+      const kind: EnemyKind = i >= n - 2 ? "wraith" : "bat";
+      const variant: EnemyVariant = i === 0 ? "large" : i === n - 1 ? "recolor" : "normal";
+      this.burst(x, y, 8, "#ff5a6e", 2.4); // 召喚の緋の土埃
+      this.spawnAt(kind, { x, y }, variant);
     }
   }
 
@@ -1338,7 +1353,8 @@ export class Engine {
       const d = Math.hypot(x, y);
       if (d > lim) { x = (x / d) * lim; y = (y / d) * lim; }
       this.burst(x, y, 12, "#cfe6ff", 3); // 蘇生の土埃
-      this.spawnAt("skeleton", { x, y });
+      // 対角の2体は硬化(recolor)の特異種: 包囲の圧を出す
+      this.spawnAt("skeleton", { x, y }, i % 3 === 0 ? "recolor" : "normal");
     }
   }
 
@@ -1862,7 +1878,9 @@ export class Engine {
     }
     const def = ENEMIES[kind];
     const esc = 1 + (w.t / 60) * m.escalate;
-    const hMul = (kind === "boss" || kind === "elite" ? 1 + (w.t / 60) * 0.02 : hpScale(w.t)) * m.hpMul * esc;
+    // ボス/エリートも時間で確かに硬くなる(6%/分)。雑魚(hpScale=11%/分)より緩やかだが、
+    // 標準の12分ボスで実効約1.7倍・長征/無限の反復ボスは出現の度に骨太になる。
+    const hMul = (kind === "boss" || kind === "elite" ? 1 + (w.t / 60) * 0.06 : hpScale(w.t)) * m.hpMul * esc;
     const v = variantTuning(variant);
     const hp = Math.round(def.hp * hMul * (v?.hpMul ?? 1));
     const e: Enemy = {

@@ -867,7 +867,7 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
   boss: {
     kind: "boss",
     name: "夜の主",
-    hp: 15000,
+    hp: 24000,
     speed: 76,
     damage: 32,
     radius: 30,
@@ -929,7 +929,7 @@ export const BOSSES: BossDef[] = [
     dmgMul: 1.0,
     radiusMul: 1.0,
     ability: "swarm",
-    trait: "蝙蝠へ分身し、打てば打つほど血を吸い癒える",
+    trait: "夜の眷属を広く喚び、打てば打つほど血を吸い癒える",
   },
   {
     id: "boneKing",
@@ -966,7 +966,7 @@ export const BOSSES: BossDef[] = [
     art: "wraithQueen",
     color: "#9b6bff",
     eye: "#d7b8ff",
-    hpMul: 0.82,
+    hpMul: 0.9,
     speedMul: 1.22,
     dmgMul: 0.95,
     radiusMul: 0.96,
