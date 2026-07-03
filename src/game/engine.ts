@@ -351,7 +351,7 @@ export class Engine {
       weapons: [{ id: "grimoire", level: 1, cd: 0.4, tick: 0 }],
       passives: [],
       boss: null, bossDefeated: false,
-      shake: 0, flash: 0, auraR: 0,
+      shake: 0, flash: 0, auras: [],
       grace: 0, graceMax: 0,
       visionScale: 1, playerSlow: 0, bossRally: false,
       auraSpeed: new Set<EnemyKind>(),
@@ -656,7 +656,13 @@ export class Engine {
   private updateWeapons(dt: number): void {
     const w = this.world;
     const d = w.derived;
-    w.auraR = 0;
+    w.auras = [];
+    // 所有者を失った宝珠を掃除する(真化で武器IDが変わった直後など)。宝珠は life=∞ のため放置すると残り続ける
+    const orbOwners = new Set<string>(w.weapons.filter((o) => WEAPONS[o.id].behavior === "orbs").map((o) => o.id));
+    for (let i = w.projectiles.length - 1; i >= 0; i--) {
+      const pr = w.projectiles[i];
+      if (pr.kind === "orb" && !orbOwners.has(pr.ownerId ?? "")) w.projectiles.splice(i, 1);
+    }
     // 装いの専用技(秘伝)を所持中か。所持していれば自機の統一グローを秘伝色に染める
     w.sigWield = !!this.signatureWeapon && w.weapons.some((o) => o.id === this.signatureWeapon);
     if (w.sigWield && this.signatureWeapon) w.sigColor = WEAPONS[this.signatureWeapon].color;
@@ -673,12 +679,13 @@ export class Engine {
         continue;
       }
       if (def.behavior === "aura") {
-        w.auraR = 86 * st.area * d.area;
-        w.auraColor = vis?.color; // 業火の聖域(真化)は金に染まる。基底/未指定は既定の緑
+        // 複数のオーラ武器(薫香＋秘伝など)が併存できるよう、上書きせず配列へ積む
+        const auraR = 86 * st.area * d.area;
+        w.auras.push({ r: auraR, color: vis?.color });
         ow.tick -= dt;
         if (ow.tick <= 0) {
           ow.tick = st.cooldown * d.cooldown;
-          this.auraTick(w.auraR, st.damage * d.might, vis?.color);
+          this.auraTick(auraR, st.damage * d.might, vis?.color);
         }
         continue;
       }
@@ -921,15 +928,20 @@ export class Engine {
     }
   }
 
-  /** 周回する宝珠を amount 個に保ち、位置を更新する(rehit = 同一敵への再ヒット間隔/秒) */
+  /**
+   * 周回する宝珠を amount 個に保ち、位置を更新する(rehit = 同一敵への再ヒット間隔/秒)。
+   * 宝珠は ownerId で武器ごとに区別する ── 挙動を共有する武器(聖鎖の宝珠と業火の輪舞など)を
+   * 両方所持しても、互いのプール・威力・再ヒット間隔を奪い合わない。
+   */
   private maintainOrbs(ow: OwnedWeapon, amount: number, damage: number, areaMul: number, angVel: number, rehit: number, vis: WeaponVis | undefined, dt: number): void {
     const w = this.world;
-    const orbs = w.projectiles.filter((p) => p.kind === "orb");
+    const orbs = w.projectiles.filter((p) => p.kind === "orb" && p.ownerId === ow.id);
     while (orbs.length < amount) {
       const o: Projectile = {
         kind: "orb", x: w.player.x, y: w.player.y, vx: 0, vy: 0,
         damage, radius: ORB_RADIUS, pierce: 999, life: Infinity,
         angle: 0, spin: 0, hit: new Set(), orbIndex: orbs.length,
+        ownerId: ow.id,
         color: vis?.color, fx: vis?.fx,
       };
       orbs.push(o);
@@ -941,20 +953,23 @@ export class Engine {
       if (idx >= 0) w.projectiles.splice(idx, 1);
     }
     const radius = ORB_ORBIT * areaMul;
-    const base = w.t * angVel;
+    // 武器ごとに位相をずらし、2つのリングが重ならず「共存」が見た目で分かるように
+    let phase = 0;
+    for (let k = 0; k < ow.id.length; k++) phase += ow.id.charCodeAt(k);
+    const base = w.t * angVel + phase;
     orbs.forEach((o, i) => {
       o.orbIndex = i;
       o.damage = damage;
       o.x = w.player.x + Math.cos(base + (i / amount) * TAU) * radius;
       o.y = w.player.y + Math.sin(base + (i / amount) * TAU) * radius;
     });
-    // 接触判定(同一敵への再ヒットは rehit 秒間隔。data.ts の orbs.cooldown が司る)
+    // 接触判定(同一敵への再ヒットは rehit 秒間隔・武器別。data.ts の orbs.cooldown が司る)
     for (const e of w.enemies) {
-      if (w.t - e.orbHitT < rehit) continue;
+      if (w.t - (e.orbHit[ow.id] ?? -1) < rehit) continue;
       for (const o of orbs) {
         const rr = o.radius + e.radius;
         if ((e.x - o.x) ** 2 + (e.y - o.y) ** 2 < rr * rr) {
-          e.orbHitT = w.t;
+          e.orbHit[ow.id] = w.t;
           this.damageEnemy(e, o.damage, vis?.color ?? "#6fd3ff", o.x, o.y, 130);
           break;
         }
@@ -1901,7 +1916,7 @@ export class Engine {
       damage: Math.round(def.damage * dmgScale(w.t) * m.dmgMul * (v?.dmgMul ?? 1)),
       radius: def.radius * (v?.radiusMul ?? 1),
       xp: Math.round(def.xp * (v?.xpMul ?? 1)),
-      hitFlash: 0, kx: 0, ky: 0, orbHitT: -1,
+      hitFlash: 0, kx: 0, ky: 0, orbHit: {},
       wobble: Math.random() * TAU,
       shootCd: kind === "warlock" ? 1.2 + Math.random() * 1.6 : 0, // 初撃をばらけさせる
       abilityCd: 0, windup: 0, windAng: 0,

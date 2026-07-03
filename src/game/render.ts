@@ -501,10 +501,12 @@ function drawGrace(v: View): void {
 function drawAura(v: View): void {
   const { ctx, world, wx, wy } = v;
   const p = world.player;
-  if (world.auraR > 0) {
-    const ar = world.auraR;
-    // 業火の聖域(真化)は金に染まる。基底/未指定は既定の緑。
-    const col = world.auraColor ?? "#7be08a";
+  // 常駐オーラは複数併存しうる(薫香＋秘伝オーラなど)。各リングを独立に描く。
+  for (const aura of world.auras) {
+    const ar = aura.r;
+    if (ar <= 0) continue;
+    // 主色付き(真化/固有技)はその色、基底/未指定は既定の緑。
+    const col = aura.color ?? "#7be08a";
     const g = ctx.createRadialGradient(wx(p.x), wy(p.y), ar * 0.4, wx(p.x), wy(p.y), ar);
     g.addColorStop(0, withAlpha(col, 0.04));
     g.addColorStop(0.85, withAlpha(col, 0.12));
@@ -514,15 +516,15 @@ function drawAura(v: View): void {
     ctx.arc(wx(p.x), wy(p.y), ar, 0, TAU);
     ctx.fill();
     ctx.strokeStyle = withAlpha(col, 0.28);
-    ctx.lineWidth = world.auraColor ? 2 : 1; // 真化は縁を厚く
+    ctx.lineWidth = aura.color ? 2 : 1; // 真化/固有技は縁を厚く
     ctx.setLineDash([6, 8]);
     ctx.lineDashOffset = -world.t * 24;
     ctx.beginPath();
     ctx.arc(wx(p.x), wy(p.y), ar, 0, TAU);
     ctx.stroke();
     ctx.setLineDash([]);
-    if (world.auraColor) {
-      // 業火の聖域: 縁に紋章(四芒)を等間隔で浮かべる(基底には無い格)
+    if (aura.color) {
+      // 真化/固有技: 縁に紋章(四芒)を等間隔で浮かべる(基底には無い格)
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
       const n = 6;

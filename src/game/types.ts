@@ -137,7 +137,7 @@ export interface Enemy {
   hitFlash: number; // 被弾フラッシュ残時間
   kx: number; // ノックバック速度
   ky: number;
-  orbHitT: number; // 宝珠による最終被弾時刻
+  orbHit: Record<string, number>; // 宝珠による最終被弾時刻(所有武器ID別。武器間で再ヒット間隔を奪い合わない)
   wobble: number; // 描画用位相
   shootCd: number; // 遠距離敵の発射クールダウン残り(術者・遠距離ボスが使用)
   abilityCd: number; // ボス固有能力(召喚・分身・咆哮など)の再発動までの残り秒
@@ -204,6 +204,7 @@ export interface Projectile {
   spin: number;
   hit: Set<number>; // 既にヒットした敵ID(多段ヒット防止)
   orbIndex?: number; // 宝珠の位相インデックス
+  ownerId?: string; // 宝珠の所有武器ID(挙動を共有する武器同士でプールを奪い合わないための区別)
   color?: string; // 固有技の主色(未指定なら kind 既定色で描く)
   fx?: ProjectileFx; // 固有技の専用エフェクト
   // ── ブーメラン専用 ──
@@ -334,8 +335,8 @@ export interface World {
   bossDefeated: boolean;
   shake: number;
   flash: number; // 被弾時の赤フラッシュ
-  auraR: number; // 薫香の現在半径(0=未所持)
-  auraColor?: string; // オーラの主色(業火の聖域=真化時は金。未指定なら基底の緑)
+  auras: { r: number; color?: string }[]; // 常駐オーラ(半径と主色)。薫香と秘伝オーラの併存に耐えるよう複数
+
   grace: number; // 再開前の待機(構え)残り秒。>0 の間は時間停止
   graceMax: number; // 待機の総秒(リング表示用)
   visionScale: number; // 視界(ランタン光)の倍率。1=通常、<1=女王の夜啼きで狭まる
