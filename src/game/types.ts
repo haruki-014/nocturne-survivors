@@ -352,8 +352,7 @@ export interface World {
   sigColor: string; // 専用技の主色(装備者グロー・統一演出の色)
   // ── 奥義(Ultimate)。討伐で血月が満ち、E で解放。中身は最多流派で決まる ──
   ultCharge: number; // 0..1。満ちると解放可能
-  ultActive: { school: SchoolId; t: number; dur: number } | null; // 発動中の奥義(経過秒/総秒)
-  timeStop: number; // 霊奥義「刻停」の残り秒。>0 の間、敵と敵弾が凍る
+  ultActive: { school: SchoolId; t: number; dur: number } | null; // 発動中の奥義(経過秒/総秒)。霊なら発動中=刻停
 }
 
 // ---------- UI との橋渡し ----------
@@ -421,7 +420,6 @@ export interface HudState {
     active: boolean;
     name: string;
     color: string;
-    school: SchoolId;
   };
 }
 
@@ -548,6 +546,12 @@ export interface UltimateDef {
   tick: number; // 周期処理の間隔(秒)。0 = 周期なし(刻停など)
   damage: number; // 1周期あたりの威力基準(might が乗る)
   radius: number; // 影響半径(月蝕/夜宴)。0 = 半径を使わない
+  // ── 流派固有の調整値(使う流派だけが持つ) ──
+  count?: number; // 千刃: 1周期の刃数
+  speed?: number; // 千刃: 刃の速度
+  life?: number; // 千刃: 刃の寿命(秒)
+  healPerHit?: number; // 夜宴: 命中1体あたりの回復HP
+  healCap?: number; // 夜宴: 1周期の回復上限HP
 }
 
 export interface MetaBonus {

@@ -39,6 +39,7 @@ import {
   SCHOOLS,
   schoolTier,
   ULTIMATES,
+  ULT_CHARGE,
   variantTuning,
   weaponArchetype,
   weaponStatBadges,
@@ -106,8 +107,6 @@ const BOOM_B = 132; // 進行方向に直交する半径(長軸。B > A で投�
 const BOOM_SPEED = 4.4; // 角速度 rad/s(一周 ≈ 1.43 s。速いほど薙ぎ払い滞空が短い)
 const BOOM_RADIUS = 13; // ヒット半径(宝珠 10 のおよそ 1.3 倍)
 
-const ULT_ACTIVE_CHARGE_MUL = 0.15; // 奥義発動中はチャージ加算をこの倍率まで抑える(奥義連打の防止)
-
 // 被弾フィードバック(プレイヤーが接触/呪弾でダメージを受けたときの共通値)
 const PLAYER_HIT_IFRAME = 0.6; // 被弾後の無敵時間(連続ヒットで一気に溶けるのを防ぐ)
 const PLAYER_HIT_FLASH = 0.3; // 画面の緋い被弾フラッシュの強さ
@@ -133,6 +132,18 @@ const BEHAVIOR_SFX: Partial<Record<WeaponDef["behavior"], SfxCue>> = {
 };
 function weaponSfx(def: WeaponDef): SfxCue {
   return (def.fx && FX_SFX[def.fx]) || BEHAVIOR_SFX[def.behavior] || "atkBolt";
+}
+
+// 宝珠リングの武器別位相(idの文字和)。純関数なので一度計算してキャッシュする(毎フレーム呼ばれる)。
+const ORB_PHASES = new Map<string, number>();
+function orbPhase(id: string): number {
+  let p = ORB_PHASES.get(id);
+  if (p === undefined) {
+    p = 0;
+    for (let k = 0; k < id.length; k++) p += id.charCodeAt(k);
+    ORB_PHASES.set(id, p);
+  }
+  return p;
 }
 
 export class Engine {
@@ -296,6 +307,7 @@ export class Engine {
         base.level = 1;
         base.cd = 0.2;
         base.tick = 0;
+        this.removeOrphanOrbs(); // 旧IDの宝珠(寿命∞)は所有者を失うのでここで掃除する
       }
     } else if (choice.kind === "weapon") {
       const owned = w.weapons.find((o) => o.id === choice.id);
@@ -362,7 +374,7 @@ export class Engine {
       skinId: this.skinId,
       sigWield: false,
       sigColor: SKINS_BY_ID[this.skinId]?.lantern ?? "#d9a441",
-      ultCharge: 0, ultActive: null, timeStop: 0,
+      ultCharge: 0, ultActive: null,
     };
   }
 
@@ -417,9 +429,8 @@ export class Engine {
     this.updateWeapons(dt);     // 各武器のクールダウンを進め、来たものは発射
     this.updateUltimate(dt);    // 奥義の進行(千刃の刃輪・月蝕の灼熱・夜宴の吸血…)
     this.updateProjectiles(dt); // 弾を前進させ、近傍の敵と当たり判定(貫通を消費)
-    if (w.timeStop > 0) {
-      // 霊奥義「刻停」: 敵・敵弾・衝波・湧きが凍る(武器と自機は動き続ける)
-      w.timeStop = Math.max(0, w.timeStop - dt);
+    if (w.ultActive?.school === "spirit") {
+      // 霊奥義「刻停」: 発動中は敵・敵弾・衝波・湧きが凍る(武器と自機は動き続ける)
     } else {
       this.updateEnemies(dt);     // 敵をプレイヤーへ寄せる/夜術師は間合い取り、接触ダメージ
       this.updateEnemyShots(dt);  // 夜術師の呪弾を前進させ自機にのみ当てる
@@ -656,13 +667,7 @@ export class Engine {
   private updateWeapons(dt: number): void {
     const w = this.world;
     const d = w.derived;
-    w.auras = [];
-    // 所有者を失った宝珠を掃除する(真化で武器IDが変わった直後など)。宝珠は life=∞ のため放置すると残り続ける
-    const orbOwners = new Set<string>(w.weapons.filter((o) => WEAPONS[o.id].behavior === "orbs").map((o) => o.id));
-    for (let i = w.projectiles.length - 1; i >= 0; i--) {
-      const pr = w.projectiles[i];
-      if (pr.kind === "orb" && !orbOwners.has(pr.ownerId ?? "")) w.projectiles.splice(i, 1);
-    }
+    w.auras.length = 0; // 毎フレーム作り直さず、同じ配列を空にして使い回す
     // 装いの専用技(秘伝)を所持中か。所持していれば自機の統一グローを秘伝色に染める
     w.sigWield = !!this.signatureWeapon && w.weapons.some((o) => o.id === this.signatureWeapon);
     if (w.sigWield && this.signatureWeapon) w.sigColor = WEAPONS[this.signatureWeapon].color;
@@ -736,8 +741,7 @@ export class Engine {
     w.shake = Math.min(1, w.shake + 0.5);
     w.texts.push({ x: w.player.x, y: w.player.y - 46, text: `奥義「${def.name}」`, life: 2.2, color: def.color, size: 20 });
     this.burst(w.player.x, w.player.y, 26, def.color, 3.4);
-    this.audio?.cue("ult");
-    if (school === "spirit") w.timeStop = def.dur; // 刻停: 敵と敵弾を凍らせる
+    this.audio?.cue("ult"); // 刻停(霊)の凍結は ultActive.school を見て update() が判定する
   }
 
   /** 奥義の進行。流派ごとの周期処理(千刃の刃輪 / 月蝕の灼熱 / 夜宴の吸血)を刻む。 */
@@ -754,51 +758,62 @@ export class Engine {
         this.ultTick = def.tick;
         if (ua.school === "steel") {
           // 千刃・満月輪: 全方位の刃輪(貫通∞)。波ごとに位相をずらして満遍なく薙ぐ
-          const n = 16;
-          const base = ua.t * 2.4; // 波ごとの回転
+          const n = def.count ?? 16;
+          const speed = def.speed ?? 540;
+          const base = ua.t * 2.4; // 波ごとの回転(視覚のリズム。威力調整は data.ts 側)
           for (let i = 0; i < n; i++) {
             const ang = base + (i / n) * TAU;
             w.projectiles.push({
               kind: "knife", x: w.player.x, y: w.player.y,
-              vx: Math.cos(ang) * 540, vy: Math.sin(ang) * 540,
+              vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed,
               damage: def.damage * might, radius: KNIFE_RADIUS, pierce: 999,
-              life: 0.9, angle: ang, spin: 0, hit: new Set(),
+              life: def.life ?? 0.9, angle: ang, spin: 0, hit: new Set(),
               color: "#e8f0ff",
             });
           }
           this.audio?.cue("atkKnife");
         } else if (ua.school === "moon") {
           // 月蝕・白夜: 広大な半径の灼熱を周期で焼く
-          for (const e of [...w.enemies]) {
-            if ((e.x - w.player.x) ** 2 + (e.y - w.player.y) ** 2 < def.radius * def.radius) {
-              this.damageEnemy(e, def.damage * might, def.color);
-            }
-          }
+          this.damageEnemiesWithin(def.radius, def.damage * might, def.color);
           this.burst(w.player.x, w.player.y, 10, def.color, 3);
         } else if (ua.school === "blood") {
-          // 血の夜宴: 半径内の命を吸い上げて緋に変える
-          let hits = 0;
-          for (const e of [...w.enemies]) {
-            if ((e.x - w.player.x) ** 2 + (e.y - w.player.y) ** 2 < def.radius * def.radius) {
-              this.damageEnemy(e, def.damage * might, def.color);
-              hits++;
-              // 緋の雫が自機へ流れる(帯域は particles 上限で自然に律速)
-              if (w.particles.length < 240) {
-                w.particles.push({
-                  x: e.x, y: e.y,
-                  vx: (w.player.x - e.x) * 1.6, vy: (w.player.y - e.y) * 1.6,
-                  life: 0.55, maxLife: 0.55, size: 2.6, color: def.color, grav: 0,
-                });
-              }
+          // 血の夜宴: 半径内の命を吸い上げて緋に変える(緋の雫が自機へ流れる)
+          const hits = this.damageEnemiesWithin(def.radius, def.damage * might, def.color, (e) => {
+            if (w.particles.length < 240) {
+              w.particles.push({
+                x: e.x, y: e.y,
+                vx: (w.player.x - e.x) * 1.6, vy: (w.player.y - e.y) * 1.6,
+                life: 0.55, maxLife: 0.55, size: 2.6, color: def.color, grav: 0,
+              });
             }
-          }
+          });
           if (hits > 0) {
-            w.player.hp = Math.min(w.player.maxHp, w.player.hp + Math.min(12, 1.2 * hits));
+            const heal = Math.min(def.healCap ?? 12, (def.healPerHit ?? 1.2) * hits);
+            w.player.hp = Math.min(w.player.maxHp, w.player.hp + heal);
           }
         }
       }
     }
     if (ua.t >= ua.dur) w.ultActive = null;
+  }
+
+  /**
+   * 自機を中心とする半径内の敵へ一律ダメージ(奥義の周期灼熱・吸血で共用)。
+   * 命中数を返す。onHit で命中ごとの追加処理(夜宴の緋の雫など)を挟める。
+   * damageEnemy → killEnemy が enemies を切り詰めるため、複製を回して安全に反復する。
+   */
+  private damageEnemiesWithin(radius: number, dmg: number, color: string, onHit?: (e: Enemy) => void): number {
+    const w = this.world;
+    const p = w.player;
+    let hits = 0;
+    for (const e of [...w.enemies]) {
+      if ((e.x - p.x) ** 2 + (e.y - p.y) ** 2 < radius * radius) {
+        this.damageEnemy(e, dmg, color);
+        hits++;
+        onHit?.(e);
+      }
+    }
+    return hits;
   }
 
   private nearestEnemies(n: number, maxDist: number): Enemy[] {
@@ -928,6 +943,16 @@ export class Engine {
     }
   }
 
+  /** 所有者を失った宝珠(真化で武器IDが変わった直後)を取り除く。宝珠は寿命∞のため放置すると残り続ける。 */
+  private removeOrphanOrbs(): void {
+    const w = this.world;
+    const owners = new Set<string>(w.weapons.filter((o) => WEAPONS[o.id].behavior === "orbs").map((o) => o.id));
+    for (let i = w.projectiles.length - 1; i >= 0; i--) {
+      const pr = w.projectiles[i];
+      if (pr.kind === "orb" && !owners.has(pr.ownerId ?? "")) w.projectiles.splice(i, 1);
+    }
+  }
+
   /**
    * 周回する宝珠を amount 個に保ち、位置を更新する(rehit = 同一敵への再ヒット間隔/秒)。
    * 宝珠は ownerId で武器ごとに区別する ── 挙動を共有する武器(聖鎖の宝珠と業火の輪舞など)を
@@ -954,9 +979,7 @@ export class Engine {
     }
     const radius = ORB_ORBIT * areaMul;
     // 武器ごとに位相をずらし、2つのリングが重ならず「共存」が見た目で分かるように
-    let phase = 0;
-    for (let k = 0; k < ow.id.length; k++) phase += ow.id.charCodeAt(k);
-    const base = w.t * angVel + phase;
+    const base = w.t * angVel + orbPhase(ow.id);
     orbs.forEach((o, i) => {
       o.orbIndex = i;
       o.damage = damage;
@@ -1349,10 +1372,7 @@ export class Engine {
       if (w.enemies.length >= MAX_ENEMIES) break;
       const ang = base + (i / n) * TAU + (Math.random() - 0.5) * 0.25;
       const d = 240 + Math.random() * 60;
-      let x = p.x + Math.cos(ang) * d;
-      let y = p.y + Math.sin(ang) * d;
-      const cd = Math.hypot(x, y);
-      if (cd > lim) { x = (x / cd) * lim; y = (y / cd) * lim; }
+      const { x, y } = this.clampToArena(p.x + Math.cos(ang) * d, p.y + Math.sin(ang) * d, lim);
       // 構成: 末尾2体は wraith(疾い追撃)、先頭の蝙蝠1体は大型・wraith 1体は硬化の特異種
       const kind: EnemyKind = i >= n - 2 ? "wraith" : "bat";
       const variant: EnemyVariant = i === 0 ? "large" : i === n - 1 ? "recolor" : "normal";
@@ -1371,10 +1391,7 @@ export class Engine {
     for (let i = 0; i < n; i++) {
       if (w.enemies.length >= MAX_ENEMIES) break;
       const ang = base + (i / n) * TAU;
-      let x = p.x + Math.cos(ang) * 230;
-      let y = p.y + Math.sin(ang) * 230;
-      const d = Math.hypot(x, y);
-      if (d > lim) { x = (x / d) * lim; y = (y / d) * lim; }
+      const { x, y } = this.clampToArena(p.x + Math.cos(ang) * 230, p.y + Math.sin(ang) * 230, lim);
       this.burst(x, y, 12, "#cfe6ff", 3); // 蘇生の土埃
       // 対角の2体は硬化(recolor)の特異種: 包囲の圧を出す
       this.spawnAt("skeleton", { x, y }, i % 3 === 0 ? "recolor" : "normal");
@@ -1507,8 +1524,8 @@ export class Engine {
     // 奥義: 討伐で血月が満ちる(強敵ほど大きく)。満ちた瞬間だけ告げる。
     // 発動中は加算を大幅に抑える(千刃/月蝕/夜宴の大量討伐で即座に連打できてしまうのを防ぐ)。
     if (w.ultCharge < 1) {
-      let gain = e.kind === "boss" ? 0.25 : e.kind === "elite" ? 0.08 : e.variant !== "normal" ? 0.03 : 0.008;
-      if (w.ultActive) gain *= ULT_ACTIVE_CHARGE_MUL;
+      let gain = e.kind === "boss" ? ULT_CHARGE.boss : e.kind === "elite" ? ULT_CHARGE.elite : e.variant !== "normal" ? ULT_CHARGE.champion : ULT_CHARGE.normal;
+      if (w.ultActive) gain *= ULT_CHARGE.activeMul;
       w.ultCharge = Math.min(1, w.ultCharge + gain);
       if (w.ultCharge >= 1 && !this.ultAnnounced) {
         this.ultAnnounced = true;
@@ -1829,8 +1846,7 @@ export class Engine {
       y = p.y + Math.sin(ang) * dist;
       if (x * x + y * y <= lim * lim) break;
     }
-    const d = Math.hypot(x, y);
-    if (d > lim) { x = (x / d) * lim; y = (y / d) * lim; }
+    ({ x, y } = this.clampToArena(x, y, lim));
     this.world.pickups.push({ kind: "curio", x, y, curioId: c.id });
     // 出現の合図(取りこぼさないよう少し派手に)
     this.burst(x, y, 18, c.color, 3);
@@ -1891,16 +1907,19 @@ export class Engine {
     }
   }
 
+  /** 座標を聖域内(中心から lim 以内)へ収める。湧き・召喚・遺物落下の共通クランプ。 */
+  private clampToArena(x: number, y: number, lim: number): { x: number; y: number } {
+    const d = Math.hypot(x, y);
+    return d > lim ? { x: (x / d) * lim, y: (y / d) * lim } : { x, y };
+  }
+
   private spawnAt(kind: EnemyKind, pos: { x: number; y: number }, variant: EnemyVariant = "normal"): Enemy {
     const w = this.world;
     const m = this.mode;
     // 聖域内に収める(境界外に湧いて延々歩いてこない)
-    const pd = Math.hypot(pos.x, pos.y);
-    const lim = ARENA_RADIUS - 30;
-    if (pd > lim) {
-      pos.x = (pos.x / pd) * lim;
-      pos.y = (pos.y / pd) * lim;
-    }
+    const cp = this.clampToArena(pos.x, pos.y, ARENA_RADIUS - 30);
+    pos.x = cp.x;
+    pos.y = cp.y;
     const def = ENEMIES[kind];
     const esc = 1 + (w.t / 60) * m.escalate;
     // ボス/エリートも時間で確かに硬くなる(6%/分)。雑魚(hpScale=11%/分)より緩やかだが、
@@ -2109,15 +2128,13 @@ export class Engine {
         ? { hp: Math.max(0, w.boss.hp), max: w.boss.maxHp, name: BOSSES_BY_ID[w.boss.bossType ?? ""]?.name ?? ENEMIES.boss.name }
         : null,
       ult: (() => {
-        const school = w.ultActive?.school ?? this.dominantSchool();
-        const def = ULTIMATES[school];
+        const def = ULTIMATES[w.ultActive?.school ?? this.dominantSchool()];
         return {
           charge: w.ultCharge,
           ready: w.ultCharge >= 1 && !w.ultActive,
           active: !!w.ultActive,
           name: def.name,
           color: def.color,
-          school,
         };
       })(),
     };

@@ -369,79 +369,75 @@ function drawAtmosphere(v: View): void {
 function drawUltimate(v: View): void {
   const { ctx, vw, vh, world, wx, wy } = v;
   const ua = world.ultActive;
-  // 刻停は ultActive が終わっても timeStop が残ることは無い(dur 同値)が、独立に読む
-  const frozen = world.timeStop > 0;
-  if (!ua && !frozen) return;
+  if (!ua) return;
   const p = world.player;
   const px = wx(p.x);
   const py = wy(p.y);
 
-  if (ua) {
-    const def = ULTIMATES[ua.school];
-    const pr = Math.min(1, ua.t / ua.dur); // 0→1
-    ctx.save();
-    ctx.globalCompositeOperation = "lighter";
+  const def = ULTIMATES[ua.school];
+  const pr = Math.min(1, ua.t / ua.dur); // 0→1
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
 
-    // 共通: 解放の瞬間に走る大リング(最初の0.6秒)
-    if (ua.t < 0.6) {
-      const rp = ua.t / 0.6;
-      ctx.strokeStyle = withAlpha(def.color, 0.6 * (1 - rp));
-      ctx.lineWidth = 3 + 6 * (1 - rp);
-      ctx.beginPath();
-      ctx.arc(px, py, 40 + rp * 620, 0, TAU);
-      ctx.stroke();
-    }
-
-    if (ua.school === "moon") {
-      // 月蝕・白夜: 広大な月光の領域と、周期ごとに拡がる淡環
-      const R = def.radius;
-      const g = ctx.createRadialGradient(px, py, 20, px, py, R);
-      g.addColorStop(0, withAlpha(def.color, 0.16));
-      g.addColorStop(0.75, withAlpha(def.color, 0.07));
-      g.addColorStop(1, withAlpha(def.color, 0));
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(px, py, R, 0, TAU);
-      ctx.fill();
-      const tp = (ua.t % def.tick) / def.tick;
-      ctx.strokeStyle = withAlpha("#fff6dd", 0.35 * (1 - tp));
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(px, py, 30 + tp * (R - 30), 0, TAU);
-      ctx.stroke();
-    } else if (ua.school === "blood") {
-      // 血の夜宴: 緋の領域(脈動)と、縁へ滲む深紅
-      const R = def.radius;
-      const pulse = 0.85 + 0.15 * Math.sin(world.t * 9);
-      const g = ctx.createRadialGradient(px, py, 10, px, py, R * pulse);
-      g.addColorStop(0, withAlpha(def.color, 0.13));
-      g.addColorStop(1, withAlpha(def.color, 0));
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(px, py, R * pulse, 0, TAU);
-      ctx.fill();
-      ctx.globalCompositeOperation = "source-over";
-      const vg = ctx.createRadialGradient(vw / 2, vh / 2, Math.min(vw, vh) * 0.36, vw / 2, vh / 2, Math.max(vw, vh) * 0.72);
-      vg.addColorStop(0, "rgba(200,50,62,0)");
-      vg.addColorStop(1, `rgba(140,20,34,${0.28 * (1 - pr * 0.4)})`);
-      ctx.fillStyle = vg;
-      ctx.fillRect(0, 0, vw, vh);
-    } else if (ua.school === "steel") {
-      // 千刃・満月輪: 刃輪そのものは投射物。ここでは薄鋼の円環だけ添える
-      ctx.strokeStyle = withAlpha(def.color, 0.22);
-      ctx.lineWidth = 1.6;
-      ctx.setLineDash([10, 14]);
-      ctx.lineDashOffset = -world.t * 60;
-      ctx.beginPath();
-      ctx.arc(px, py, 54, 0, TAU);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-    ctx.restore();
+  // 共通: 解放の瞬間に走る大リング(最初の0.6秒)
+  if (ua.t < 0.6) {
+    const rp = ua.t / 0.6;
+    ctx.strokeStyle = withAlpha(def.color, 0.6 * (1 - rp));
+    ctx.lineWidth = 3 + 6 * (1 - rp);
+    ctx.beginPath();
+    ctx.arc(px, py, 40 + rp * 620, 0, TAU);
+    ctx.stroke();
   }
 
-  // 霊・刻停: 藍の静寂(世界が冷え、自機の周りに刻印環が回る)
-  if (frozen) {
+  if (ua.school === "moon") {
+    // 月蝕・白夜: 広大な月光の領域と、周期ごとに拡がる淡環
+    const R = def.radius;
+    const g = ctx.createRadialGradient(px, py, 20, px, py, R);
+    g.addColorStop(0, withAlpha(def.color, 0.16));
+    g.addColorStop(0.75, withAlpha(def.color, 0.07));
+    g.addColorStop(1, withAlpha(def.color, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(px, py, R, 0, TAU);
+    ctx.fill();
+    const tp = (ua.t % def.tick) / def.tick;
+    ctx.strokeStyle = withAlpha("#fff6dd", 0.35 * (1 - tp));
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(px, py, 30 + tp * (R - 30), 0, TAU);
+    ctx.stroke();
+  } else if (ua.school === "blood") {
+    // 血の夜宴: 緋の領域(脈動)と、縁へ滲む深紅
+    const R = def.radius;
+    const pulse = 0.85 + 0.15 * Math.sin(world.t * 9);
+    const g = ctx.createRadialGradient(px, py, 10, px, py, R * pulse);
+    g.addColorStop(0, withAlpha(def.color, 0.13));
+    g.addColorStop(1, withAlpha(def.color, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(px, py, R * pulse, 0, TAU);
+    ctx.fill();
+    ctx.globalCompositeOperation = "source-over";
+    const vg = ctx.createRadialGradient(vw / 2, vh / 2, Math.min(vw, vh) * 0.36, vw / 2, vh / 2, Math.max(vw, vh) * 0.72);
+    vg.addColorStop(0, "rgba(200,50,62,0)");
+    vg.addColorStop(1, `rgba(140,20,34,${0.28 * (1 - pr * 0.4)})`);
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, vw, vh);
+  } else if (ua.school === "steel") {
+    // 千刃・満月輪: 刃輪そのものは投射物。ここでは薄鋼の円環だけ添える
+    ctx.strokeStyle = withAlpha(def.color, 0.22);
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([10, 14]);
+    ctx.lineDashOffset = -world.t * 60;
+    ctx.beginPath();
+    ctx.arc(px, py, 54, 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  ctx.restore();
+
+  // 霊・刻停: 藍の静寂(世界が冷え、自機の周りに刻印環が回る)。発動中=凍結。
+  if (ua.school === "spirit") {
     ctx.save();
     ctx.fillStyle = "rgba(70,58,140,0.12)";
     ctx.fillRect(0, 0, vw, vh);
@@ -1156,7 +1152,8 @@ function drawProjectiles(v: View): void {
   }
   ctx.globalCompositeOperation = "source-over";
 
-  // 宝珠の鎖(プレイヤーと結ぶ薄い線。固有技なら主色)
+  // 宝珠の鎖(プレイヤーと結ぶ薄い線。固有技なら主色)。同じ走査で聖環(halo)の宝珠も拾う。
+  let halo: Array<(typeof world.projectiles)[number]> | null = null;
   for (const pr of world.projectiles) {
     if (pr.kind !== "orb") continue;
     ctx.strokeStyle = withAlpha(pr.color ?? "#6fd3ff", 0.16);
@@ -1165,11 +1162,11 @@ function drawProjectiles(v: View): void {
     ctx.moveTo(wx(p.x), wy(p.y));
     ctx.lineTo(wx(pr.x), wy(pr.y));
     ctx.stroke();
+    if (pr.fx === "halo") (halo ??= []).push(pr);
   }
 
   // 神罰の聖環(真化): 隣り合う宝珠を弧で結び「環」を成す(名の通りの聖環を見せる)
-  const halo = world.projectiles.filter((pr) => pr.kind === "orb" && pr.fx === "halo");
-  if (halo.length > 1) {
+  if (halo && halo.length > 1) {
     halo.sort((a, b) => (a.orbIndex ?? 0) - (b.orbIndex ?? 0));
     ctx.save();
     ctx.globalCompositeOperation = "lighter";

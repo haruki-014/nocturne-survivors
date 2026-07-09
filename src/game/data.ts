@@ -674,6 +674,9 @@ export const ULTIMATES: Record<SchoolId, UltimateDef> = {
     tick: 0.35, // 刃輪の発生間隔
     damage: 24, // 刃1枚の威力(might 乗算)
     radius: 0,
+    count: 16, // 1周期の刃数
+    speed: 540, // 刃の速度
+    life: 0.9, // 刃の寿命(秒)
   },
   spirit: {
     school: "spirit",
@@ -704,8 +707,19 @@ export const ULTIMATES: Record<SchoolId, UltimateDef> = {
     tick: 0.22, // 吸血の周期
     damage: 12, // 1周期・1体あたりの吸血量(might 乗算)
     radius: 340, // 宴の半径
+    healPerHit: 1.2, // 命中1体あたりの回復HP
+    healCap: 12, // 1周期の回復上限HP
   },
 };
+
+/** 奥義チャージの経済。討伐1体あたりの血月ゲージ増分(0..1)と、発動中の抑制倍率。 */
+export const ULT_CHARGE = {
+  normal: 0.008, // 通常の雑魚
+  champion: 0.03, // 特異種(大型/色違い)
+  elite: 0.08, // エリート
+  boss: 0.25, // ボス
+  activeMul: 0.15, // 奥義発動中はこの倍率まで抑える(連打の防止)
+} as const;
 
 // ------------------------------------------------------------
 // パッシブ (最大6スロット)
