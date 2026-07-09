@@ -158,11 +158,9 @@ export default function PauseMenu({ hud, settings, onSettings, onResume, onQuit,
           <button className="btn" onClick={onResume} autoFocus>
             夜へ戻る
           </button>
-          <div className="btn-row">
-            <button className="btn ghost btn-sm" onClick={onQuit}>
-              この夜を諦める
-            </button>
-          </div>
+          <button className="btn ghost btn-sm" onClick={onQuit}>
+            この夜を諦める
+          </button>
         </div>
       </div>
     </div>

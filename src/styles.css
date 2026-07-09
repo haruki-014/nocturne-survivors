@@ -608,7 +608,15 @@ button {
   padding: 9px 8px;
   white-space: nowrap;
 }
-.btn-row > .btn-sm { flex: none; padding: 7px 22px; }
+/* 小さめの副次ボタン(単独で置く時は中央寄せ・幅は内容ぶんだけ)。
+   .btn-col > .btn の width:100% に勝つよう詳細度を1段上げる。 */
+.btn.btn-sm,
+.btn-col > .btn.btn-sm {
+  width: auto;
+  align-self: center;
+  font-size: 13px;
+  padding: 7px 22px;
+}
 
 .btn-col {
   display: flex;

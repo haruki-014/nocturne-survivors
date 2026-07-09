@@ -11,7 +11,7 @@
 //     ・見た目: 真化は金(is-evolution)、専用技は紫(is-signature)の格を与える。
 
 import { useEffect, useRef, useState } from "react";
-import type { HudState, UpgradeChoice } from "../game/types";
+import type { HudSlot, HudState, UpgradeChoice } from "../game/types";
 import { WEAPONS, PASSIVES, SCHOOLS } from "../game/data";
 import { Sigil } from "./icons";
 import SkillTree from "./SkillTree";
@@ -26,6 +26,16 @@ const TAGS: Record<UpgradeChoice["kind"], string> = {
 };
 
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+
+/** ビルド帯の1スロット(武器/加護で共通のミニ表示)。 */
+function luSlot(s: HudSlot) {
+  return (
+    <span key={s.id} className="lu-slot" title={`${s.name} Lv.${s.level}`} style={{ "--slot-color": s.color } as React.CSSProperties}>
+      <Sigil name={s.icon} />
+      <i>{s.level}</i>
+    </span>
+  );
+}
 
 function maxLevelOf(c: UpgradeChoice): number {
   if (c.kind === "weapon" && c.id) return WEAPONS[c.id]?.maxLevel ?? 99;
@@ -229,19 +239,9 @@ export default function LevelUpModal({ choices, onPick, hud, skinId }: Props) {
         {/* 現在のビルド帯: 選んでいる最中も手持ちが見える(Death Must Die 流) */}
         {hud && (hud.weapons.length > 0 || hud.passives.length > 0) && (
           <div className="lu-build" aria-label="現在のビルド">
-            {hud.weapons.map((s) => (
-              <span key={s.id} className="lu-slot" title={`${s.name} Lv.${s.level}`} style={{ "--slot-color": s.color } as React.CSSProperties}>
-                <Sigil name={s.icon} />
-                <i>{s.level}</i>
-              </span>
-            ))}
+            {hud.weapons.map(luSlot)}
             {hud.passives.length > 0 && <span className="lu-sep" aria-hidden="true" />}
-            {hud.passives.map((s) => (
-              <span key={s.id} className="lu-slot" title={`${s.name} Lv.${s.level}`} style={{ "--slot-color": s.color } as React.CSSProperties}>
-                <Sigil name={s.icon} />
-                <i>{s.level}</i>
-              </span>
-            ))}
+            {hud.passives.map(luSlot)}
           </div>
         )}
 
