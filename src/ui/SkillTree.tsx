@@ -12,6 +12,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { HudSlot, WeaponDef, WeaponId } from "../game/types";
 import { EVOLUTIONS, PASSIVES, SKINS_BY_ID, WEAPONS } from "../game/data";
 import { Sigil } from "./icons";
+import { MoonMark } from "./ornaments";
 
 interface Props {
   weapons: HudSlot[]; // 所持中の武器(真化済みは evolved=true)
@@ -165,7 +166,14 @@ export default function SkillTree({ weapons, passives, skinId, onClose }: Props)
   return (
     <div className="skilltree-overlay" onClick={onClose}>
       <div className="skilltree" role="dialog" aria-label="技の系統" onClick={(e) => e.stopPropagation()}>
+        {/* 背景の透かし: 大きな月の意匠と上部の金暈(内容の下層) */}
+        <span className="skt-veil" aria-hidden="true"><MoonMark /></span>
         <div className="skt-head">月 詠 の 系 統</div>
+        <div className="ornament skt-ornament" aria-hidden="true">
+          <span className="rule" />
+          <MoonMark />
+          <span className="rule right" />
+        </div>
         <p className="skt-sub">
           下が手持ち、上が真化の先 ── 金は真化目前
           {(scrollable.x || scrollable.y) && (
@@ -177,7 +185,7 @@ export default function SkillTree({ weapons, passives, skinId, onClose }: Props)
         </p>
 
         <div className="skt-scroll" ref={scrollRef}>
-          <div className="skt-forest" style={{ "--maxrows": maxRows } as React.CSSProperties}>
+          <div className="skt-forest rise-seq" style={{ "--maxrows": maxRows } as React.CSSProperties}>
             {systems.length === 0 && !sig && (
               <p className="skt-empty">まだ系統は芽吹いていない。武器を手に取れ。</p>
             )}

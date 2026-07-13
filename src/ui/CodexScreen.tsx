@@ -3,6 +3,7 @@ import type { EnemyKind, WeaponId } from "../game/types";
 import { ENEMIES, WEAPONS, PASSIVES, EVOLUTIONS, SCHOOLS, BOSSES, CURIOS, TOTAL_CURIOS } from "../game/data";
 import { enemyPortrait } from "../game/render";
 import { Sigil } from "./icons";
+import { RiteHeader } from "./ornaments";
 import {
   ACHIEVEMENTS,
   TOTAL_EVOLUTIONS,
@@ -18,12 +19,12 @@ import {
 
 type Tab = "records" | "bestiary" | "armory" | "relics" | "honors";
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "records", label: "記録" },
-  { id: "bestiary", label: "図鑑" },
-  { id: "armory", label: "武具" },
-  { id: "relics", label: "遺物" },
-  { id: "honors", label: "称号" },
+const TABS: { id: Tab; label: string; icon: string }[] = [
+  { id: "records", label: "記録", icon: "candle" },
+  { id: "bestiary", label: "図鑑", icon: "bat" },
+  { id: "armory", label: "武具", icon: "blades" },
+  { id: "relics", label: "遺物", icon: "starburst" },
+  { id: "honors", label: "称号", icon: "shield" },
 ];
 
 function fmtTime(t: number): string {
@@ -317,8 +318,13 @@ export default function CodexScreen({ profile, onBack, onReset, onToggleCurio }:
   const [tab, setTab] = useState<Tab>("records");
   return (
     <div className="overlay dim">
-      <div className="panel codex" role="dialog" aria-label="記録の間">
-        <h2 className="codex-title">記 録 の 間</h2>
+      <div
+        className="panel codex rite-panel"
+        role="dialog"
+        aria-label="記録の間"
+        style={{ "--rite-tint": "#b078ff" } as React.CSSProperties}
+      >
+        <RiteHeader title="記 録 の 間" icon="tome" />
         <div className="codex-tabs">
           {TABS.map((t) => (
             <button
@@ -326,11 +332,13 @@ export default function CodexScreen({ profile, onBack, onReset, onToggleCurio }:
               className={`codex-tab${tab === t.id ? " active" : ""}`}
               onClick={() => setTab(t.id)}
             >
+              <Sigil name={t.icon} className="tab-ico" />
               {t.label}
             </button>
           ))}
         </div>
-        <div className="codex-body">
+        {/* key=tab で切替時に中身を再マウントし、顕現(fade-up)をやり直す */}
+        <div className="codex-body" key={tab}>
           {tab === "records" && <Records p={profile} onReset={onReset} />}
           {tab === "bestiary" && <Bestiary p={profile} />}
           {tab === "armory" && <Armory p={profile} />}

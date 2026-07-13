@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import type { HudSlot, HudState, UpgradeChoice } from "../game/types";
 import { WEAPONS, PASSIVES, SCHOOLS } from "../game/data";
 import { Sigil } from "./icons";
+import { EmberField, MoonMark } from "./ornaments";
 import SkillTree from "./SkillTree";
 
 // 選択画面が出てから決定入力を受け付けるまでの間(ミリ秒)。誤確定の防止と「間」の演出。
@@ -138,12 +139,18 @@ export default function LevelUpModal({ choices, onPick, hud, skinId }: Props) {
 
   return (
     <div className="overlay dim">
+      <EmberField count={8} tint="#ffcf8a" seed={5} />
       <div className="levelup" role="dialog" aria-label="アルカナを選ぶ">
         {/* 補助機能(系統樹)は主導線(カード)から外し、右上コーナーへ */}
         <button className="btn ghost levelup-tree-corner" onClick={() => setShowTree(true)}>
           <Sigil name="star4" className="tree-toggle-ico" /> 系統樹 <kbd>Tab</kbd>
         </button>
         <div className="levelup-title">月 詠 の 刻</div>
+        <div className="ornament lu-ornament" aria-hidden="true">
+          <span className="rule" />
+          <MoonMark />
+          <span className="rule right" />
+        </div>
         <div className="levelup-sub">── 一枚のアルカナを引け ──</div>
         {/* choicesが入れ替わったらカードを再マウントしてドローアニメをやり直す */}
         <div className="cards" key={choices.map((c) => c.key).join("|")}>

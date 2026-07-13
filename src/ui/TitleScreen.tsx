@@ -6,6 +6,7 @@
 
 import { TOTAL_EVOLUTIONS, ACHIEVEMENTS, type Profile } from "../meta/profile";
 import { Sigil } from "./icons";
+import { EmberField, MoonMark } from "./ornaments";
 import TaskbarHero from "./TaskbarHero";
 
 interface Props {
@@ -23,57 +24,12 @@ function fmtTime(t: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-// 残り火: 決定的にばらけた値で、規則性を感じさせない漂い方にする
-const EMBERS = Array.from({ length: 16 }, (_, i) => {
-  const r = (n: number) => {
-    const x = Math.sin((i + 1) * (n * 12.9898)) * 43758.5453;
-    return x - Math.floor(x);
-  };
-  return {
-    left: `${r(1) * 100}%`,
-    size: `${2 + r(2) * 3}px`,
-    dur: `${7 + r(3) * 7}s`,
-    delay: `${r(4) * 9}s`,
-    drift: `${(r(5) - 0.5) * 80}px`,
-    alpha: 0.4 + r(6) * 0.45,
-  };
-});
-
-// アルカナ風の月の意匠(飾り罫の中央に置く小さなSVG)
-function MoonMark() {
-  return (
-    <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
-      <circle cx="13" cy="13" r="7.5" fill="none" stroke="currentColor" strokeWidth="1" />
-      <path d="M16 7.5 a7.5 7.5 0 1 0 0 11 a5.6 5.6 0 1 1 0 -11 Z" fill="currentColor" opacity="0.9" />
-      <circle cx="13" cy="1.5" r="1.1" fill="currentColor" />
-      <circle cx="13" cy="24.5" r="1.1" fill="currentColor" />
-    </svg>
-  );
-}
-
 export default function TitleScreen({ onStart, onCodex, onAltar, onTreasury, profile, onHeroSync }: Props) {
   const played = profile.runs > 0;
   return (
     <div className="overlay dim title-overlay">
       <TaskbarHero profile={profile} onHeroSync={onHeroSync} />
-      <div className="embers" aria-hidden="true">
-        {EMBERS.map((e, i) => (
-          <span
-            key={i}
-            className="ember"
-            style={
-              {
-                left: e.left,
-                "--ember-size": e.size,
-                "--ember-dur": e.dur,
-                "--ember-delay": e.delay,
-                "--ember-drift": e.drift,
-                "--ember-a": e.alpha,
-              } as React.CSSProperties
-            }
-          />
-        ))}
-      </div>
+      <EmberField count={16} />
 
       <div className="title-scene">
         <div className="title-brand">

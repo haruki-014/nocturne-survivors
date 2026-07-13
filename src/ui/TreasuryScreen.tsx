@@ -10,6 +10,7 @@ import type { GearItem, GearSlot, Profile } from "../meta/profile";
 import { heroView, isAffinityMatch, RARITY_COLORS, RARITY_NAMES, TRAITS, slotLabel, skinSignature, setBonusPct } from "../meta/hero";
 import { SKINS_BY_ID } from "../game/data";
 import { Sigil } from "./icons";
+import { EmberField, RiteHeader } from "./ornaments";
 
 interface Props {
   profile: Profile;
@@ -94,20 +95,22 @@ export default function TreasuryScreen({ profile, onEquip, onUnequip, onSell, on
 
   return (
     <div className="overlay dim">
-      <div className="treasury" role="dialog" aria-label="宝物庫">
-        <div className="treasury-head">
-          <h2 className="treasury-title">宝 物 庫</h2>
-          <div className="treasury-hero">
-            <span>Lv.{v.level}</span>
-            <span>深度 {v.depth}</span>
-            <span>攻 {v.stats.atk}</span>
-            <span>体 {v.stats.maxHp}</span>
-            <span>手数 {v.stats.atkSpeed.toFixed(2)}</span>
-          </div>
-        </div>
-        <p className="treasury-sub">
-          本編で集めた装備を選んで纏え。今の装い「{skin?.name ?? "—"}」に適合する装備を揃えるほど強くなる。
-        </p>
+      <EmberField count={10} tint="#d9a441" seed={4} />
+      <div className="treasury rite-panel" role="dialog" aria-label="宝物庫">
+        <RiteHeader
+          title="宝 物 庫"
+          icon="chest"
+          sub={`本編で集めた装備を選んで纏え。今の装い「${skin?.name ?? "—"}」に適合する装備を揃えるほど強くなる。`}
+          aside={
+            <div className="treasury-hero">
+              <span>Lv.{v.level}</span>
+              <span>深度 {v.depth}</span>
+              <span>攻 {v.stats.atk}</span>
+              <span>体 {v.stats.maxHp}</span>
+              <span>手数 {v.stats.atkSpeed.toFixed(2)}</span>
+            </div>
+          }
+        />
 
         {/* ── 一致セットの進捗 ＋ 装いの固有特性 ── */}
         <div className="set-banner" style={{ "--accent": skin?.scarf ?? "#d9a441" } as React.CSSProperties}>
@@ -138,7 +141,7 @@ export default function TreasuryScreen({ profile, onEquip, onUnequip, onSell, on
         </div>
 
         {/* ── 装着スロット ── */}
-        <div className="treasury-slots">
+        <div className="treasury-slots rise-seq">
           {v.equipped.map((g) => (
             <div
               key={g.slot}
@@ -155,7 +158,13 @@ export default function TreasuryScreen({ profile, onEquip, onUnequip, onSell, on
                   <button className="btn ghost gear-act" onClick={() => onUnequip(g.slot)}>外す</button>
                 </>
               ) : (
-                <div className="slot-empty">未装備</div>
+                <>
+                  <div className="slot-empty">未装備</div>
+                  {/* 空の台座: スロットの紋を淡く透かす */}
+                  <span className="slot-watermark" aria-hidden="true">
+                    <Sigil name={SLOT_ICON[g.slot]} />
+                  </span>
+                </>
               )}
             </div>
           ))}
@@ -186,7 +195,7 @@ export default function TreasuryScreen({ profile, onEquip, onUnequip, onSell, on
         {inv.length === 0 ? (
           <p className="treasury-empty">夜に踏み出し、骸が落とす装備を集めよ。拾った装備はここに納まる。</p>
         ) : (
-          <div className="treasury-inv">
+          <div className="treasury-inv rise-seq">
             {inv.map((item) => (
               <div
                 key={item.id}
